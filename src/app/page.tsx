@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Card from "@/components/Card";
+import MapCard from "@/components/MapCard";
 import { getDashboardSeed } from "@/services/api";
-import { formatBabyHistoryLabel, formatCategoryLabel } from "@/lib/utils";
 
 export default async function Home() {
   const { mothers, loginHistory } = await getDashboardSeed();
@@ -26,7 +26,7 @@ export default async function Home() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               href="/dashboard"
-              className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+              className="rounded-full bg-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-amber-600 hover:text-slate-900"
             >
               Buka dashboard
             </Link>
@@ -97,7 +97,7 @@ export default async function Home() {
             ].map((item) => (
               <div
                 key={item}
-                className="soft-dot rounded-[1.5rem] border border-slate-200/70 bg-white/80 px-5 py-4 pl-7 text-sm font-medium text-slate-700"
+                className="border border-slate-200/70 bg-white/80 px-5 py-4 pl-7 text-sm font-medium text-slate-700"
               >
                 {item}
               </div>
@@ -106,36 +106,11 @@ export default async function Home() {
         </Card>
 
         <Card
-          eyebrow="Peta Desa Cisarua "
-          title="Data terbaru yang akan muncul di dashboard"
-          description="Preview ini membantu menyamakan ekspektasi struktur data sekaligus rasa visual yang lebih dewasa."
+          eyebrow="Peta Desa Cisarua"
+          title="Wilayah Tegalsari, Tegalwaru"
+          description="Area peta diarahkan ke lokasi Tegalsari, Kecamatan Tegalwaru, Kabupaten Purwakarta."
         >
-          <div className="space-y-4">
-            {mothers.slice(0, 3).map((mother) => (
-              <div
-                key={mother.id}
-                className="rounded-[1.5rem] border border-slate-200/70 bg-white/88 p-4"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-heading text-xl font-semibold text-slate-900">
-                      {mother.fullName}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {mother.age} tahun • {formatCategoryLabel(mother.category)} • RT{" "}
-                      {mother.rt}/RW {mother.rw}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                    {mother.riskLevel}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm text-slate-600">
-                  Riwayat: {formatBabyHistoryLabel(mother.babyLossHistory)}
-                </p>
-              </div>
-            ))}
-          </div>
+          <MapCard />
         </Card>
       </section>
     </div>

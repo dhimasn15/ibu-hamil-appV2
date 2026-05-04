@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import Image from 'next/image';
 
 const links = [
   { href: "/", label: "Beranda" },
@@ -18,8 +19,14 @@ export default function Navbar() {
     <header className="sticky top-0 z-30 border-b border-white/40 bg-white/70 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 text-sm font-bold text-white shadow-lg shadow-orange-200">
-            BC
+          <div className="relative h-12 w-30 overflow-hidden ">
+            <Image
+              src="/image/kpilmu.png"
+              alt="Logo KP Ilmu"
+              fill
+              className="object-cover" 
+              priority
+            />
           </div>
           <div>
             <p className="font-heading text-lg font-bold text-slate-900">
