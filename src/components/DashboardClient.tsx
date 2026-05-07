@@ -12,15 +12,15 @@ import {
   formatRiskLabel,
 } from "@/lib/utils";
 
-type DashboardClientProps = {
+type CekDataProps = {
   initialMothers: MotherProfile[];
   loginHistory: LoginRecord[];
 };
 
-export default function DashboardClient({
+export default function CekData({
   initialMothers,
   loginHistory,
-}: DashboardClientProps) {
+}: CekDataProps) {
   const [nameQuery, setNameQuery] = useState("");
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");

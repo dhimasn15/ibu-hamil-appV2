@@ -14,33 +14,18 @@ export default async function Home() {
     <div className="flex flex-col gap-8 lg:gap-10">
       <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="surface-card-strong rounded-[1.75rem] p-6 sm:p-8 lg:p-10">
-          <p className="section-kicker">Frontend MVP</p>
           <h1 className="section-title mt-4 max-w-3xl text-slate-900">
             Dashboard ibu hamil dan menyusui yang terasa ringkas, tenang, dan profesional.
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-            Arah visualnya sekarang lebih minimalis untuk pengguna dewasa:
-            tipografi bersih, warna netral, komponen ringan, dan navigasi yang
-            fokus pada pekerjaan admin lapangan.
+            Sistem Database untuk Ibu Hamil dan Menyusui Berbasis Web.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/dashboard"
+              href="/cekdata"
               className="rounded-full bg-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-amber-600 hover:text-slate-900"
             >
-              Buka dashboard
-            </Link>
-            <Link
-              href="/ibu-hamil"
-              className="rounded-full border border-slate-300 bg-white/80 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-500 hover:text-slate-900"
-            >
-              Tambah data ibu
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-full border border-transparent px-5 py-3 text-sm font-semibold text-slate-600 transition hover:text-slate-900"
-            >
-              Coba login admin
+              Cari Data Ibu Hamil & Menyusui
             </Link>
           </div>
         </div>
@@ -106,9 +91,9 @@ export default async function Home() {
         </Card>
 
         <Card
-          eyebrow="Peta Desa Cisarua"
-          title="Wilayah Tegalsari, Tegalwaru"
-          description="Area peta diarahkan ke lokasi Tegalsari, Kecamatan Tegalwaru, Kabupaten Purwakarta."
+          eyebrow="Peta Kecamatan Tegalwaru"
+          title="Batas wilayah & cakupan binaan"
+          description="Peta satelit menampilkan batas wilayah Kecamatan Tegalwaru, Kabupaten Purwakarta, Jawa Barat beserta titik landmark utama."
         >
           <MapCard />
         </Card>

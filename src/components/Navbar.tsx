@@ -7,8 +7,7 @@ import Image from 'next/image';
 
 const links = [
   { href: "/", label: "Beranda" },
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/ibu-hamil", label: "Data Ibu" },
+  { href: "/cekdata", label: "Cek Data Ibu" },
   { href: "/login", label: "Login Admin" },
 ];
 
@@ -51,7 +50,7 @@ export default function Navbar() {
                 className={cn(
                   "rounded-full px-4 py-2 text-sm font-semibold transition",
                   active
-                    ? "bg-amber-500 text-white"
+                    ? "bg-amber-500 hover:bg-amber-600 hover:text-slate-900"
                     : "text-slate-600 hover:bg-white hover:text-slate-900",
                 )}
               >
