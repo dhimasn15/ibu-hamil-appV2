@@ -1,6 +1,8 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { AdminSession } from "@/lib/auth";
 import type { LoginRecord, MotherProfile, RiskLevel } from "@/lib/types";
 import {
   formatBabyHistoryLabel,
@@ -10,6 +12,7 @@ import {
 import MapPanel from "@/components/MapPanel";
 
 type Props = {
+  currentAdmin: AdminSession;
   mothers: MotherProfile[];
   loginHistory: LoginRecord[];
 };
@@ -352,12 +355,25 @@ function RiskRows({
   );
 }
 
-export default function AdminDashboardClient({ mothers, loginHistory }: Props) {
+export default function AdminDashboardClient({
+  currentAdmin,
+  mothers,
+  loginHistory,
+}: Props) {
+  const router = useRouter();
   const [section, setSection] = useState<Section>("ringkasan");
   const [query, setQuery] = useState("");
   const [catF, setCatF] = useState("semua");
   const [riskF, setRiskF] = useState("semua");
+  const [loggingOut, setLoggingOut] = useState(false);
   const deferredQuery = useDeferredValue(query);
+
+  async function logout() {
+    setLoggingOut(true);
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
 
   const total = mothers.length;
   const pregnant = mothers.filter((item) => item.category === "hamil").length;
@@ -405,10 +421,10 @@ export default function AdminDashboardClient({ mothers, loginHistory }: Props) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-slate-950">
-                  Admin BundaCare
+                  {currentAdmin.name}
                 </p>
                 <p className="truncate text-xs text-slate-400">
-                  Tegalwaru Health Desk
+                  {currentAdmin.region}
                 </p>
               </div>
               <Icon name="chevron" className="h-4 w-4 text-slate-300" />
@@ -490,10 +506,18 @@ export default function AdminDashboardClient({ mothers, loginHistory }: Props) {
                   A
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-950">BundaCare</p>
-                  <p className="text-xs text-slate-400">Admin</p>
+                  <p className="text-sm font-bold text-slate-950">
+                    {currentAdmin.name}
+                  </p>
+                  <p className="text-xs text-slate-400">{currentAdmin.email}</p>
                 </div>
-                <Icon name="chevron" className="h-4 w-4 rotate-90 text-slate-300" />
+                <button
+                  onClick={logout}
+                  disabled={loggingOut}
+                  className="rounded-full border border-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:border-rose-100 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-60"
+                >
+                  {loggingOut ? "Keluar..." : "Keluar"}
+                </button>
               </div>
             </div>
           </header>

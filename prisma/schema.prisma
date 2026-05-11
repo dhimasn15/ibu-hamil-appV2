@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AdminUser {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         String        @default("admin")
+  qrToken      String        @unique
+  region       String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  loginRecords LoginRecord[]
+
+  @@map("admin_users")
+}
+
+model LoginRecord {
+  id         String    @id @default(cuid())
+  adminId    String?
+  adminEmail String
+  adminName  String
+  method     String
+  status     String
+  device     String
+  createdAt  DateTime  @default(now())
+  admin      AdminUser? @relation(fields: [adminId], references: [id])
+
+  @@map("login_records")
+}

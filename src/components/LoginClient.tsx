@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useState } from "react";
-import Card from "@/components/Card";
+import { useRouter, useSearchParams } from "next/navigation";
 import QrBadge from "@/components/QrBadge";
 import type { AdminUser, LoginRecord } from "@/lib/types";
 
@@ -14,25 +14,52 @@ export default function LoginClient({
   admins,
   initialHistory,
 }: LoginClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<"email" | "qr">("email");
   const [email, setEmail] = useState(admins[0]?.email ?? "");
+  const [password, setPassword] = useState("");
   const [selectedQr, setSelectedQr] = useState(admins[0]?.qrToken ?? "");
   const [result, setResult] = useState("");
   const [history, setHistory] = useState(initialHistory);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function appendHistory(record: LoginRecord) {
     setHistory((current) => [record, ...current].slice(0, 8));
   }
 
-  function submitEmailLogin() {
-    const admin = admins.find((item) => item.email === email);
+  async function submitEmailLogin() {
+    const normalizedEmail = email.trim().toLowerCase();
 
+    if (!normalizedEmail || !password) {
+      setResult("Email dan password wajib diisi.");
+      return;
+    }
+
+    setIsSubmitting(true);
     startTransition(() => {
-      if (!admin) {
+      setResult("");
+    });
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password,
+        }),
+      });
+      const data = (await response.json()) as {
+        message?: string;
+        admin?: AdminUser;
+      };
+
+      if (!response.ok || !data.admin) {
         appendHistory({
           id: `login-${Date.now()}`,
-          adminEmail: email,
-          adminName: "Email tidak terdaftar",
+          adminEmail: normalizedEmail,
+          adminName: "Login gagal",
           method: "email",
           timestamp: new Date().toLocaleDateString("id-ID", {
             day: "numeric",
@@ -42,14 +69,15 @@ export default function LoginClient({
           status: "failed",
           device: "Browser admin",
         });
-        setResult("Login ditolak. Hanya email admin terdaftar yang boleh masuk.");
+        setResult(data.message ?? "Email atau password salah.");
         return;
       }
 
+      const redirectTo = searchParams.get("redirect") ?? "/dashboard";
       appendHistory({
         id: `login-${Date.now()}`,
-        adminEmail: admin.email,
-        adminName: admin.name,
+        adminEmail: data.admin.email,
+        adminName: data.admin.name,
         method: "email",
         timestamp: new Date().toLocaleDateString("id-ID", {
           day: "numeric",
@@ -59,34 +87,20 @@ export default function LoginClient({
         status: "success",
         device: "Browser admin",
       });
-      setResult(`Login email berhasil untuk admin ${admin.name}.`);
-    });
+      setResult(`Login berhasil. Selamat datang ${data.admin.name}.`);
+      router.replace(redirectTo);
+      router.refresh();
+    } catch {
+      setResult("Login gagal karena koneksi server bermasalah.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function submitQrLogin() {
-    const admin = admins.find((item) => item.qrToken === selectedQr);
-
-    startTransition(() => {
-      if (!admin) {
-        setResult("QR admin tidak valid.");
-        return;
-      }
-
-      appendHistory({
-        id: `login-${Date.now()}`,
-        adminEmail: admin.email,
-        adminName: admin.name,
-        method: "qr",
-        timestamp: new Date().toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
-        status: "success",
-        device: "QR scanner",
-      });
-      setResult(`QR login berhasil. Selamat datang ${admin.name}.`);
-    });
+    setResult(
+      "Login QR belum diaktifkan untuk akses dashboard. Gunakan email dan password admin dari database.",
+    );
   }
 
   const selectedAdmin =
@@ -173,11 +187,26 @@ export default function LoginClient({
                     />
                   </div>
 
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
+                      Password
+                    </label>
+                    <input
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      type="password"
+                      onKeyDown={(e) => e.key === "Enter" && submitEmailLogin()}
+                      placeholder="Masukkan password admin"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
+                    />
+                  </div>
+
                   <button
                     onClick={submitEmailLogin}
-                    className="w-full rounded-2xl bg-amber-500 py-3.5 text-sm font-bold text-white transition hover:bg-amber-600 active:scale-[0.98]"
+                    disabled={isSubmitting}
+                    className="w-full rounded-2xl bg-amber-500 py-3.5 text-sm font-bold text-white transition hover:bg-amber-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Masuk sebagai admin
+                    {isSubmitting ? "Memeriksa akun..." : "Masuk sebagai admin"}
                   </button>
 
                   {/* Admin quick select */}
@@ -189,7 +218,10 @@ export default function LoginClient({
                       {admins.slice(0, 3).map((admin) => (
                         <button
                           key={admin.id}
-                          onClick={() => setEmail(admin.email)}
+                          onClick={() => {
+                            setEmail(admin.email);
+                            setPassword("");
+                          }}
                           className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 transition hover:border-amber-300 hover:bg-amber-50"
                         >
                           {admin.email.split("@")[0]}

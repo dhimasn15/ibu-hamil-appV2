@@ -320,7 +320,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
         <section className="surface-card-strong rounded-[2rem] p-6 sm:p-10">
           <p className="section-kicker">Portal ibu</p>
           <h1 className="mt-4 font-heading text-4xl font-bold text-slate-900 sm:text-5xl">
-            Cek data kesehatan Anda.
+            Cek data kesehatan Ibu
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-500">
             Scan QR Code yang ada di kartu ibu Anda, atau masukkan kode secara
