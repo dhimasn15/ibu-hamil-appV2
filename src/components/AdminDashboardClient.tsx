@@ -1,15 +1,30 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import {
+  useDeferredValue,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import type { AdminSession } from "@/lib/auth";
-import type { LoginRecord, MotherProfile, RiskLevel } from "@/lib/types";
+import type {
+  BabyLossHistory,
+  LoginRecord,
+  MotherCategory,
+  MotherProfile,
+  RiskLevel,
+} from "@/lib/types";
 import {
+  createMotherId,
+  createQrCode,
+  deriveRiskLevel,
   formatBabyHistoryLabel,
   formatCategoryLabel,
   formatRiskLabel,
 } from "@/lib/utils";
-import MapPanel from "@/components/MapPanel";
+import MapCard from "@/components/MapCard";
 
 type Props = {
   currentAdmin: AdminSession;
@@ -17,15 +32,52 @@ type Props = {
   loginHistory: LoginRecord[];
 };
 
-type Section = "ringkasan" | "data-ibu" | "peta" | "statistik" | "riwayat";
+type Section =
+  | "ringkasan"
+  | "data-ibu"
+  | "tambah-data"
+  | "peta"
+  | "statistik"
+  | "riwayat";
 
 const NAV = [
   { id: "ringkasan", label: "Ringkasan", icon: "grid" },
   { id: "data-ibu", label: "Data Ibu", icon: "users" },
+  { id: "tambah-data", label: "Tambah Data", icon: "plus" },
   { id: "peta", label: "Peta Wilayah", icon: "map" },
   { id: "statistik", label: "Statistik", icon: "chart" },
   { id: "riwayat", label: "Riwayat Login", icon: "clock" },
 ] as const;
+
+type MotherFormState = {
+  fullName: string;
+  age: string;
+  category: MotherCategory;
+  babyLossHistory: BabyLossHistory;
+  address: string;
+  village: string;
+  rt: string;
+  rw: string;
+  lastVisit: string;
+  notes: string;
+  gestationalAgeWeeks: string;
+  childAgeMonths: string;
+};
+
+const INITIAL_FORM: MotherFormState = {
+  fullName: "",
+  age: "",
+  category: "hamil",
+  babyLossHistory: "tidak_ada",
+  address: "",
+  village: "",
+  rt: "",
+  rw: "",
+  lastVisit: "",
+  notes: "",
+  gestationalAgeWeeks: "",
+  childAgeMonths: "",
+};
 
 const RISK_STYLE: Record<
   RiskLevel,
@@ -139,6 +191,15 @@ function Icon({
     );
   }
 
+  if (name === "plus") {
+    return (
+      <svg {...common}>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    );
+  }
+
   if (name === "chevron") {
     return (
       <svg {...common}>
@@ -182,24 +243,24 @@ function MetricCard({
   tone: "amber" | "teal" | "rose" | "slate";
 }) {
   const tones = {
-    amber: "from-amber-50 text-amber-700",
-    teal: "from-teal-50 text-teal-700",
-    rose: "from-rose-50 text-rose-700",
-    slate: "from-slate-50 text-slate-700",
+    amber: "bg-amber-50 text-amber-700 ring-amber-100",
+    teal: "bg-teal-50 text-teal-700 ring-teal-100",
+    rose: "bg-rose-50 text-rose-700 ring-rose-100",
+    slate: "bg-slate-50 text-slate-700 ring-slate-100",
   };
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_16px_32px_rgba(15,23,42,0.04)]">
+    <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
       <div
-        className={`mb-9 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${tones[tone]} to-white`}
+        className={`mb-7 flex h-10 w-10 items-center justify-center rounded-full ring-1 ${tones[tone]}`}
       >
         <span className="h-2.5 w-2.5 rounded-full bg-current" />
       </div>
-      <p className="text-sm text-slate-400">{label}</p>
+      <p className="text-sm font-medium text-slate-500">{label}</p>
       <p className="mt-1 font-heading text-2xl font-bold text-slate-950">
         {value}
       </p>
-      <p className="mt-1 text-xs text-slate-400">{helper}</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500">{helper}</p>
     </div>
   );
 }
@@ -309,7 +370,7 @@ function AgeBars({ mothers }: { mothers: MotherProfile[] }) {
               style={{ height: `${Math.max((item.total / max) * 100, 8)}%` }}
             />
           </div>
-          <span className="text-xs text-slate-400">{item.label}</span>
+          <span className="text-xs text-slate-500">{item.label}</span>
         </div>
       ))}
     </div>
@@ -355,16 +416,40 @@ function RiskRows({
   );
 }
 
+function Field({
+  label,
+  helper,
+  children,
+}: {
+  label: string;
+  helper?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-2 text-sm font-semibold text-slate-700">
+      {label}
+      {children}
+      {helper ? <span className="text-xs font-normal text-slate-500">{helper}</span> : null}
+    </label>
+  );
+}
+
+const inputClass =
+  "rounded-2xl border border-slate-200/80 bg-white px-4 py-3 font-normal text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70";
+
 export default function AdminDashboardClient({
   currentAdmin,
   mothers,
   loginHistory,
 }: Props) {
   const router = useRouter();
+  const [motherData, setMotherData] = useState(mothers);
   const [section, setSection] = useState<Section>("ringkasan");
   const [query, setQuery] = useState("");
   const [catF, setCatF] = useState("semua");
   const [riskF, setRiskF] = useState("semua");
+  const [form, setForm] = useState<MotherFormState>(INITIAL_FORM);
+  const [formMessage, setFormMessage] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
@@ -375,16 +460,86 @@ export default function AdminDashboardClient({
     router.refresh();
   }
 
-  const total = mothers.length;
-  const pregnant = mothers.filter((item) => item.category === "hamil").length;
-  const breastfeeding = mothers.filter((item) => item.category === "menyusui").length;
-  const highRisk = mothers.filter((item) => item.riskLevel === "tinggi").length;
-  const midRisk = mothers.filter((item) => item.riskLevel === "sedang").length;
-  const lowRisk = mothers.filter((item) => item.riskLevel === "rendah").length;
+  function updateForm<K extends keyof MotherFormState>(
+    key: K,
+    value: MotherFormState[K],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFormMessage("");
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const age = Number(form.age);
+    const gestationalAgeWeeks = Number(form.gestationalAgeWeeks);
+    const childAgeMonths = Number(form.childAgeMonths);
+
+    if (!form.fullName.trim() || !form.address.trim() || !form.village.trim()) {
+      setFormMessage("Nama, alamat, dan desa/kelurahan wajib diisi.");
+      return;
+    }
+
+    if (!Number.isFinite(age) || age < 10 || age > 60) {
+      setFormMessage("Umur ibu harus diisi antara 10 sampai 60 tahun.");
+      return;
+    }
+
+    if (
+      form.category === "hamil" &&
+      (!Number.isFinite(gestationalAgeWeeks) || gestationalAgeWeeks < 1 || gestationalAgeWeeks > 42)
+    ) {
+      setFormMessage("Usia kehamilan harus diisi antara 1 sampai 42 minggu.");
+      return;
+    }
+
+    if (
+      form.category === "menyusui" &&
+      (!Number.isFinite(childAgeMonths) || childAgeMonths < 0 || childAgeMonths > 24)
+    ) {
+      setFormMessage("Usia anak harus diisi antara 0 sampai 24 bulan.");
+      return;
+    }
+
+    const seed = motherData.length + 1;
+    const newMother: MotherProfile = {
+      id: createMotherId(seed),
+      qrCode: createQrCode(seed),
+      fullName: form.fullName.trim(),
+      age,
+      category: form.category,
+      babyLossHistory: form.babyLossHistory,
+      address: form.address.trim(),
+      village: form.village.trim(),
+      rt: form.rt.trim() || "-",
+      rw: form.rw.trim() || "-",
+      latitude: -6.215 + seed * 0.0018,
+      longitude: 106.8454 + seed * 0.0014,
+      lastVisit: form.lastVisit || new Date().toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }),
+      riskLevel: deriveRiskLevel({ age, babyLossHistory: form.babyLossHistory }),
+      notes: form.notes.trim() || "Belum ada catatan tambahan.",
+      ...(form.category === "hamil" ? { gestationalAgeWeeks } : { childAgeMonths }),
+    };
+
+    setMotherData((current) => [newMother, ...current]);
+    setForm(INITIAL_FORM);
+    setFormMessage(`Data ${newMother.fullName} berhasil ditambahkan.`);
+  }
+
+  const total = motherData.length;
+  const pregnant = motherData.filter((item) => item.category === "hamil").length;
+  const breastfeeding = motherData.filter((item) => item.category === "menyusui").length;
+  const highRisk = motherData.filter((item) => item.riskLevel === "tinggi").length;
+  const midRisk = motherData.filter((item) => item.riskLevel === "sedang").length;
+  const lowRisk = motherData.filter((item) => item.riskLevel === "rendah").length;
 
   const filtered = useMemo(
     () =>
-      mothers.filter((mother) => {
+      motherData.filter((mother) => {
         const keyword = deferredQuery.toLowerCase();
         const matchesQuery =
           mother.fullName.toLowerCase().includes(keyword) ||
@@ -395,35 +550,34 @@ export default function AdminDashboardClient({
 
         return matchesQuery && matchesCategory && matchesRisk;
       }),
-    [catF, deferredQuery, mothers, riskF],
+    [catF, deferredQuery, motherData, riskF],
   );
 
   const topVillage = useMemo(() => {
     const counts = new Map<string, number>();
-    mothers.forEach((mother) => {
+    motherData.forEach((mother) => {
       counts.set(mother.village, (counts.get(mother.village) ?? 0) + 1);
     });
 
     return [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  }, [mothers]);
+  }, [motherData]);
 
   const activeTitle = NAV.find((item) => item.id === section)?.label ?? "Ringkasan";
-  const recent = mothers.slice(0, 5);
+  const recent = motherData.slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-amber-50/45 p-0 text-slate-950 sm:p-5 lg:p-7">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)] sm:min-h-[calc(100vh-2.5rem)] sm:rounded-[1.65rem]">
-        <aside className="hidden w-[286px] shrink-0 border-r border-slate-100 bg-white lg:flex lg:flex-col">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)] sm:min-h-[calc(100vh-2.5rem)]">
+        <aside className="hidden w-[292px] shrink-0 border-r border-slate-200/70 bg-[#fffdf8] lg:flex lg:flex-col">
           <div className="border-b border-slate-100 p-4">
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500 text-sm font-bold text-white shadow-[0_10px_22px_rgba(245,158,11,0.24)]">
+            <div className="flex items-center gap-3 rounded-2xl border border-amber-100 bg-white p-3 shadow-sm">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500 text-sm font-bold text-white shadow-[0_10px_22px_rgba(245,158,11,0.22)]">
                 BC
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-slate-950">
                   {currentAdmin.name}
                 </p>
-                <p className="truncate text-xs text-slate-400">
+                <p className="truncate text-xs text-slate-500">
                   {currentAdmin.region}
                 </p>
               </div>
@@ -432,13 +586,13 @@ export default function AdminDashboardClient({
           </div>
 
           <div className="border-b border-slate-100 p-4">
-            <label className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-400">
+            <label className="flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white px-3 py-2.5 text-sm text-slate-400 shadow-sm">
               <Icon name="search" className="h-4 w-4" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className="min-w-0 flex-1 bg-transparent text-slate-700 outline-none placeholder:text-slate-400"
-                placeholder="Cari data..."
+                placeholder="Cari nama atau desa..."
               />
             </label>
           </div>
@@ -451,7 +605,7 @@ export default function AdminDashboardClient({
                 className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
                   section === item.id
                     ? "bg-amber-500 text-white shadow-[0_10px_22px_rgba(245,158,11,0.2)]"
-                    : "text-slate-400 hover:bg-amber-50 hover:text-slate-700"
+                    : "text-slate-500 hover:bg-amber-50 hover:text-slate-800"
                 }`}
               >
                 <Icon name={item.icon} />
@@ -461,7 +615,7 @@ export default function AdminDashboardClient({
           </nav>
 
           <div className="p-4">
-            <div className="rounded-2xl bg-amber-500 p-5 text-white shadow-[0_18px_36px_rgba(245,158,11,0.26)]">
+            <div className="rounded-[1.35rem] bg-gradient-to-br from-amber-500 to-orange-500 p-5 text-white shadow-[0_18px_36px_rgba(245,158,11,0.24)]">
               <p className="text-sm font-bold">Data aktif</p>
               <p className="mt-1 text-xs text-amber-50">
                 Total ibu binaan Kecamatan Tegalwaru
@@ -481,15 +635,15 @@ export default function AdminDashboardClient({
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col bg-amber-50/35">
-          <header className="flex flex-col gap-4 border-b border-slate-100 bg-white px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
-            <label className="flex max-w-xl flex-1 items-center gap-3 rounded-2xl bg-white text-slate-400">
+        <div className="flex min-w-0 flex-1 flex-col bg-[#faf7f0]">
+          <header className="flex flex-col gap-4 border-b border-slate-200/70 bg-white px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+            <label className="flex max-w-xl flex-1 items-center gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 text-slate-400 transition focus-within:border-amber-300 focus-within:bg-white focus-within:shadow-sm">
               <Icon name="search" className="h-5 w-5 shrink-0" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent py-2 text-base text-slate-700 outline-none placeholder:text-slate-400"
-                placeholder="Search something..."
+                className="min-w-0 flex-1 bg-transparent py-2.5 text-base text-slate-700 outline-none placeholder:text-slate-400"
+                placeholder="Cari nama ibu, desa, atau alamat"
               />
             </label>
 
@@ -502,14 +656,14 @@ export default function AdminDashboardClient({
                 <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
               </button>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700 ring-1 ring-amber-200/70">
                   A
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-950">
                     {currentAdmin.name}
                   </p>
-                  <p className="text-xs text-slate-400">{currentAdmin.email}</p>
+                  <p className="text-xs text-slate-500">{currentAdmin.email}</p>
                 </div>
                 <button
                   onClick={logout}
@@ -526,52 +680,40 @@ export default function AdminDashboardClient({
             <section className="border-b border-slate-100 bg-white px-4 py-5 sm:px-6">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex items-start gap-4">
-                  <button
-                    className="mt-3 hidden text-slate-300 transition hover:text-slate-600 sm:block"
-                    aria-label="Kembali"
-                  >
-                    <Icon name="chevron" className="h-5 w-5 rotate-180" />
-                  </button>
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500 text-lg font-bold text-white shadow-[0_10px_22px_rgba(245,158,11,0.24)]">
                     B
                   </div>
                   <div>
                     <h1 className="font-heading text-2xl font-bold text-slate-950">
-                      Dashboard Ibu Tegalwaru
+                      Dashboard Pemantauan Ibu
                     </h1>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Ringkasan pemantauan ibu hamil dan menyusui.
+                    <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                      Lihat data penting, ibu yang perlu didahulukan, dan sebaran wilayah dalam satu tampilan yang ringkas.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-3 text-xs text-slate-500">
                   <span>Status</span>
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-bold text-emerald-600">
-                    Active
+                    Aktif
                   </span>
                   <span>Wilayah</span>
                   <span className="font-semibold text-slate-900">
                     Kecamatan Tegalwaru
                   </span>
-                  <button
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 hover:bg-slate-50 hover:text-slate-700"
-                    aria-label="Menu lainnya"
-                  >
-                    <span className="text-lg leading-none">...</span>
-                  </button>
                 </div>
               </div>
 
-              <div className="mt-6 flex gap-6 overflow-x-auto">
+              <div className="mt-6 flex gap-2 overflow-x-auto rounded-2xl bg-slate-50 p-1">
                 {NAV.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => setSection(item.id)}
-                    className={`border-b-2 px-1 pb-3 text-sm font-medium transition ${
+                    className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
                       section === item.id
-                        ? "border-amber-500 text-slate-950"
-                        : "border-transparent text-slate-400 hover:text-slate-700"
+                        ? "bg-white text-slate-950 shadow-sm"
+                        : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
                     }`}
                   >
                     {item.label}
@@ -581,20 +723,20 @@ export default function AdminDashboardClient({
             </section>
 
             <section className="p-4 sm:p-6">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700/80">
                     {activeTitle}
                   </p>
                   <h2 className="mt-1 font-heading text-xl font-bold text-slate-950">
-                    Overview operasional
+                    Informasi yang paling perlu dilihat
                   </h2>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <select
                     value={catF}
                     onChange={(event) => setCatF(event.target.value)}
-                    className="rounded-xl border border-slate-100 bg-white px-3 py-2 text-sm text-slate-600 outline-none transition focus:border-amber-300"
+                    className="rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
                   >
                     <option value="semua">Semua kategori</option>
                     <option value="hamil">Ibu hamil</option>
@@ -603,7 +745,7 @@ export default function AdminDashboardClient({
                   <select
                     value={riskF}
                     onChange={(event) => setRiskF(event.target.value)}
-                    className="rounded-xl border border-slate-100 bg-white px-3 py-2 text-sm text-slate-600 outline-none transition focus:border-amber-300"
+                    className="rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
                   >
                     <option value="semua">Semua risiko</option>
                     <option value="rendah">Risiko rendah</option>
@@ -642,19 +784,19 @@ export default function AdminDashboardClient({
                     />
                   </div>
 
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_16px_32px_rgba(15,23,42,0.04)]">
+                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
                     <div className="grid gap-5 xl:grid-cols-[220px_1fr]">
                       <div className="flex flex-col justify-between gap-6">
                         <div>
-                          <p className="text-sm text-slate-400">Wilayah padat</p>
+                          <p className="text-sm font-medium text-slate-500">Desa dengan data terbanyak</p>
                           <p className="mt-1 text-2xl font-bold text-slate-950">
                             {topVillage?.[0] ?? "Tegalwaru"}
                           </p>
-                          <p className="mt-5 text-sm text-slate-400">Data terfilter</p>
+                          <p className="mt-5 text-sm font-medium text-slate-500">Data sesuai pencarian</p>
                           <p className="mt-1 text-2xl font-bold text-slate-950">
                             {filtered.length} ibu
                           </p>
-                          <p className="mt-5 text-sm text-slate-400">Periode</p>
+                          <p className="mt-5 text-sm font-medium text-slate-500">Periode pantauan</p>
                           <p className="mt-1 text-2xl font-bold text-slate-950">
                             Bulan ini
                           </p>
@@ -664,13 +806,13 @@ export default function AdminDashboardClient({
                           Refresh data
                         </button>
                       </div>
-                      <div className="[&>div]:h-full [&>div]:min-h-[360px] [&>div]:border-slate-100 [&>div]:bg-slate-50">
-                        <MapPanel mothers={filtered.length ? filtered : mothers} />
+                      <div className="[&>div]:h-full [&>div]:min-h-[360px] [&>div]:border-slate-100 [&>div]:bg-slate-50 [&_[aria-label]]:h-[360px]">
+                        <MapCard />
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-100 bg-white shadow-[0_16px_32px_rgba(15,23,42,0.04)] xl:col-span-2">
+                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.05)] xl:col-span-2">
                     <div className="grid divide-y divide-slate-100 xl:grid-cols-[1fr_1fr_1fr] xl:divide-x xl:divide-y-0">
                       <div className="p-4">
                         <div className="mb-4 flex items-center justify-between">
@@ -678,19 +820,19 @@ export default function AdminDashboardClient({
                             <p className="text-sm font-bold text-slate-950">
                               Ibu prioritas
                             </p>
-                            <p className="text-xs text-slate-400">
-                              Berdasarkan data terbaru
-                            </p>
+                          <p className="text-xs text-slate-500">
+                            Untuk dilihat lebih dulu
+                          </p>
                           </div>
                           <span className="text-xs font-bold text-amber-700">
-                            + Tambah data
+                            Prioritas
                           </span>
                         </div>
                         <div className="space-y-3">
                           {recent.map((mother) => (
                             <div
                               key={mother.id}
-                              className="grid grid-cols-[1fr_58px_78px] items-center gap-3 border-b border-slate-50 pb-3 last:border-0 last:pb-0"
+                              className="grid grid-cols-[1fr_58px_92px] items-center gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"
                             >
                               <div className="flex min-w-0 items-center gap-3">
                                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
@@ -700,7 +842,7 @@ export default function AdminDashboardClient({
                                   <p className="truncate text-sm font-semibold text-slate-950">
                                     {mother.fullName}
                                   </p>
-                                  <p className="truncate text-xs text-slate-400">
+                                  <p className="truncate text-xs text-slate-500">
                                     RT {mother.rt}/RW {mother.rw}
                                   </p>
                                 </div>
@@ -711,7 +853,7 @@ export default function AdminDashboardClient({
                               <span
                                 className={`w-fit justify-self-end rounded-full px-2 py-1 text-xs font-bold ${RISK_STYLE[mother.riskLevel].pill}`}
                               >
-                                {mother.riskLevel}
+                                {formatRiskLabel(mother.riskLevel)}
                               </span>
                             </div>
                           ))}
@@ -746,13 +888,13 @@ export default function AdminDashboardClient({
               )}
 
               {section === "data-ibu" && (
-                <div className="rounded-2xl border border-slate-100 bg-white shadow-[0_16px_32px_rgba(15,23,42,0.04)]">
+                <div className="rounded-[1.35rem] border border-slate-200/70 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
                   <div className="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-bold text-slate-950">Daftar ibu</p>
-                      <p className="text-xs text-slate-400">
-                        Data yang tampil mengikuti filter dan pencarian.
-                      </p>
+                        <p className="text-xs text-slate-500">
+                          Data yang tampil mengikuti filter dan pencarian.
+                        </p>
                     </div>
                     <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                       {filtered.length} data
@@ -760,7 +902,7 @@ export default function AdminDashboardClient({
                   </div>
                   <div className="overflow-x-auto">
                     <div className="min-w-[900px]">
-                      <div className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr] gap-4 border-b border-slate-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
+                      <div className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr] gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                         <span>Nama</span>
                         <span>Umur</span>
                         <span>Kategori</span>
@@ -778,7 +920,7 @@ export default function AdminDashboardClient({
                               <p className="truncate font-semibold text-slate-950">
                                 {mother.fullName}
                               </p>
-                              <p className="truncate text-xs text-slate-400">
+                              <p className="truncate text-xs text-slate-500">
                                 {mother.village}, RT {mother.rt}/RW {mother.rw}
                               </p>
                             </div>
@@ -798,9 +940,9 @@ export default function AdminDashboardClient({
                           </div>
                         ))}
                         {!filtered.length && (
-                          <div className="px-5 py-10 text-center text-sm text-slate-400">
-                            Tidak ada data yang cocok.
-                          </div>
+                            <div className="px-5 py-10 text-center text-sm text-slate-500">
+                              Tidak ada data yang cocok.
+                            </div>
                         )}
                       </div>
                     </div>
@@ -809,33 +951,33 @@ export default function AdminDashboardClient({
               )}
 
               {section === "peta" && (
-                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_16px_32px_rgba(15,23,42,0.04)]">
+                <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-bold text-slate-950">
                         Peta wilayah ibu binaan
                       </p>
-                      <p className="text-xs text-slate-400">
-                        Marker menampilkan posisi relatif dari koordinat data.
+                      <p className="text-xs text-slate-500">
+                        Titik pada peta membantu melihat sebaran ibu binaan per wilayah.
                       </p>
                     </div>
                     <span className="w-fit rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
                       {filtered.length || total} titik
                     </span>
                   </div>
-                  <MapPanel mothers={filtered.length ? filtered : mothers} />
+                  <MapCard />
                 </div>
               )}
 
               {section === "statistik" && (
                 <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-                  <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.04)]">
+                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
                     <p className="text-sm font-bold text-slate-950">
-                      Audience Age
+                      Sebaran umur ibu
                     </p>
                     <AgeBars mothers={mothers} />
                   </div>
-                  <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.04)]">
+                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
                     <p className="text-sm font-bold text-slate-950">
                       Kategori dan risiko
                     </p>
@@ -851,16 +993,193 @@ export default function AdminDashboardClient({
                   </div>
                 </div>
               )}
+              
+              {section === "tambah-data" && (
+                <div className="grid gap-4 xl:grid-cols-[1.45fr_0.8fr]">
+                  <form
+                    onSubmit={handleSubmit}
+                    className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]"
+                  >
+                    <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-slate-950">
+                          Form input data ibu
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          Isi data dasar untuk menambahkan ibu binaan baru ke dashboard.
+                        </p>
+                      </div>
+                      <span className="w-fit rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                        QR otomatis
+                      </span>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field label="Nama lengkap">
+                        <input
+                          value={form.fullName}
+                          onChange={(event) => updateForm("fullName", event.target.value)}
+                          className={inputClass}
+                          placeholder="Contoh: Siti Aminah"
+                        />
+                      </Field>
+                      <Field label="Umur ibu">
+                        <input
+                          value={form.age}
+                          onChange={(event) => updateForm("age", event.target.value)}
+                          className={inputClass}
+                          inputMode="numeric"
+                          placeholder="Contoh: 28"
+                        />
+                      </Field>
+                      <Field label="Kategori">
+                        <select
+                          value={form.category}
+                          onChange={(event) => updateForm("category", event.target.value as MotherCategory)}
+                          className={inputClass}
+                        >
+                          <option value="hamil">Ibu hamil</option>
+                          <option value="menyusui">Ibu menyusui</option>
+                        </select>
+                      </Field>
+                      <Field label="Riwayat bayi">
+                        <select
+                          value={form.babyLossHistory}
+                          onChange={(event) => updateForm("babyLossHistory", event.target.value as BabyLossHistory)}
+                          className={inputClass}
+                        >
+                          <option value="tidak_ada">Tidak ada</option>
+                          <option value="keguguran">Keguguran</option>
+                          <option value="bayi_<3_bulan">Bayi meninggal &lt; 3 bulan</option>
+                          <option value="bayi_<1_tahun">Bayi meninggal &lt; 1 tahun</option>
+                        </select>
+                      </Field>
+                      <Field label="Desa/Kelurahan">
+                        <input
+                          value={form.village}
+                          onChange={(event) => updateForm("village", event.target.value)}
+                          className={inputClass}
+                          placeholder="Kelurahan Sukamaju"
+                        />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="RT">
+                          <input
+                            value={form.rt}
+                            onChange={(event) => updateForm("rt", event.target.value)}
+                            className={inputClass}
+                            placeholder="03"
+                          />
+                        </Field>
+                        <Field label="RW">
+                          <input
+                            value={form.rw}
+                            onChange={(event) => updateForm("rw", event.target.value)}
+                            className={inputClass}
+                            placeholder="05"
+                          />
+                        </Field>
+                      </div>
+                      <Field label="Alamat" helper="Tuliskan alamat singkat yang mudah dicari.">
+                        <textarea
+                          value={form.address}
+                          onChange={(event) => updateForm("address", event.target.value)}
+                          className={`${inputClass} min-h-28 resize-none`}
+                          placeholder="Jl. Melati No. 8"
+                        />
+                      </Field>
+                      <Field label={form.category === "hamil" ? "Usia kehamilan" : "Usia anak"} helper={form.category === "hamil" ? "Dalam minggu." : "Dalam bulan."}>
+                        <input
+                          value={form.category === "hamil" ? form.gestationalAgeWeeks : form.childAgeMonths}
+                          onChange={(event) =>
+                            updateForm(
+                              form.category === "hamil" ? "gestationalAgeWeeks" : "childAgeMonths",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClass}
+                          inputMode="numeric"
+                          placeholder={form.category === "hamil" ? "24" : "6"}
+                        />
+                      </Field>
+                      <Field label="Tanggal kunjungan terakhir" helper="Opsional. Jika kosong memakai tanggal hari ini.">
+                        <input
+                          type="date"
+                          value={form.lastVisit}
+                          onChange={(event) => updateForm("lastVisit", event.target.value)}
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field label="Catatan" helper="Opsional, misalnya kondisi kesehatan atau tindak lanjut.">
+                        <textarea
+                          value={form.notes}
+                          onChange={(event) => updateForm("notes", event.target.value)}
+                          className={`${inputClass} min-h-28 resize-none`}
+                          placeholder="Perlu kunjungan rumah rutin..."
+                        />
+                      </Field>
+                    </div>
+
+                    {formMessage ? (
+                      <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        {formMessage}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm(INITIAL_FORM);
+                          setFormMessage("");
+                        }}
+                        className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="submit"
+                        className="rounded-2xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(245,158,11,0.22)] transition hover:bg-amber-600"
+                      >
+                        Simpan data ibu
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
+                    <p className="text-sm font-bold text-slate-950">Preview data</p>
+                    <div className="mt-4 rounded-3xl bg-amber-50 p-4 text-sm text-slate-700">
+                      <p className="font-heading text-xl font-bold text-slate-950">
+                        {form.fullName || "Nama ibu"}
+                      </p>
+                      <p className="mt-1 text-slate-500">
+                        {formatCategoryLabel(form.category)} · {form.age || "-"} tahun
+                      </p>
+                      <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600">
+                        <span>Wilayah: {form.village || "Belum diisi"}</span>
+                        <span>RT/RW: {form.rt || "-"}/{form.rw || "-"}</span>
+                        <span>Riwayat: {formatBabyHistoryLabel(form.babyLossHistory)}</span>
+                        <span>
+                          Risiko estimasi: {form.age ? formatRiskLabel(deriveRiskLevel({ age: Number(form.age), babyLossHistory: form.babyLossHistory })) : "-"}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-4 text-xs leading-5 text-slate-500">
+                      Data yang disimpan akan langsung muncul di daftar ibu dan memengaruhi ringkasan dashboard pada sesi ini.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {section === "riwayat" && (
-                <div className="rounded-2xl border border-slate-100 bg-white shadow-[0_16px_32px_rgba(15,23,42,0.04)]">
+                <div className="rounded-[1.35rem] border border-slate-200/70 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
                   <div className="border-b border-slate-100 p-4">
                     <p className="text-sm font-bold text-slate-950">
                       Log akses admin
                     </p>
-                    <p className="text-xs text-slate-400">
-                      Riwayat login berhasil dan gagal.
-                    </p>
+                      <p className="text-xs text-slate-500">
+                        Riwayat login berhasil dan gagal.
+                      </p>
                   </div>
                   <div className="divide-y divide-slate-50">
                     {loginHistory.map((item) => (
@@ -872,7 +1191,7 @@ export default function AdminDashboardClient({
                           <p className="font-semibold text-slate-950">
                             {item.adminName}
                           </p>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-slate-500">
                             {item.adminEmail}
                           </p>
                         </div>
@@ -893,7 +1212,7 @@ export default function AdminDashboardClient({
                       </div>
                     ))}
                     {!loginHistory.length && (
-                      <div className="px-5 py-10 text-center text-sm text-slate-400">
+                      <div className="px-5 py-10 text-center text-sm text-slate-500">
                         Belum ada riwayat login.
                       </div>
                     )}
@@ -904,6 +1223,6 @@ export default function AdminDashboardClient({
           </main>
         </div>
       </div>
-    </div>
+  
   );
 }
