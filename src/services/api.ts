@@ -24,8 +24,54 @@ function formatLoginTimestamp(date: Date) {
   }).format(date);
 }
 
+function formatMotherVisit(date: Date) {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function mapMother(item: Awaited<ReturnType<typeof prisma.motherProfile.findMany>>[number]): MotherProfile {
+  return {
+    id: item.id,
+    qrCode: item.qrCode,
+    fullName: item.fullName,
+    age: item.age,
+    category: item.category === "menyusui" ? "menyusui" : "hamil",
+    babyLossHistory:
+      item.babyLossHistory === "keguguran" ||
+      item.babyLossHistory === "bayi_<3_bulan" ||
+      item.babyLossHistory === "bayi_<1_tahun"
+        ? item.babyLossHistory
+        : "tidak_ada",
+    address: item.address,
+    village: item.village,
+    rt: item.rt,
+    rw: item.rw,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    lastVisit: formatMotherVisit(item.lastVisit),
+    riskLevel:
+      item.riskLevel === "tinggi" || item.riskLevel === "sedang"
+        ? item.riskLevel
+        : "rendah",
+    notes: item.notes,
+    gestationalAgeWeeks: item.gestationalAgeWeeks ?? undefined,
+    childAgeMonths: item.childAgeMonths ?? undefined,
+  };
+}
+
 export async function getPregnancyProfiles() {
-  return cloneMothers();
+  try {
+    const mothers = await prisma.motherProfile.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+
+    return mothers.map(mapMother);
+  } catch {
+    return cloneMothers();
+  }
 }
 
 export async function getLoginHistory() {
@@ -69,12 +115,22 @@ export async function getAdminDirectory() {
 }
 
 export async function getDashboardSeed() {
+  const [mothers, loginHistory] = await Promise.all([
+    getPregnancyProfiles(),
+    getLoginHistory(),
+  ]);
+
   return {
-    mothers: cloneMothers(),
-    loginHistory: cloneLogins(),
+    mothers,
+    loginHistory,
   };
 }
 
 export async function findMotherByQr(qrCode: string) {
-  return cloneMothers().find((item) => item.qrCode === qrCode);
+  try {
+    const mother = await prisma.motherProfile.findUnique({ where: { qrCode } });
+    return mother ? mapMother(mother) : undefined;
+  } catch {
+    return cloneMothers().find((item) => item.qrCode === qrCode);
+  }
 }

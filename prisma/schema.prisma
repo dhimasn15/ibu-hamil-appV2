@@ -35,3 +35,27 @@ model LoginRecord {
 
   @@map("login_records")
 }
+
+model MotherProfile {
+  id                  String   @id @default(cuid())
+  qrCode              String   @unique
+  fullName            String
+  age                 Int
+  category            String
+  babyLossHistory     String
+  address             String
+  village             String
+  rt                  String
+  rw                  String
+  latitude            Float
+  longitude           Float
+  lastVisit           DateTime
+  riskLevel           String
+  notes               String
+  gestationalAgeWeeks Int?
+  childAgeMonths      Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("mother_profiles")
+}

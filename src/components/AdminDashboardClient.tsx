@@ -4,6 +4,8 @@ import {
   useDeferredValue,
   useMemo,
   useState,
+  useRef,
+  useEffect,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -17,17 +19,17 @@ import type {
   RiskLevel,
 } from "@/lib/types";
 import {
-  createMotherId,
-  createQrCode,
   deriveRiskLevel,
   formatBabyHistoryLabel,
   formatCategoryLabel,
   formatRiskLabel,
 } from "@/lib/utils";
 import MapCard from "@/components/MapCard";
+import QrBadge from "@/components/QrBadge";
 
 type Props = {
   currentAdmin: AdminSession;
+  currentAdminQrToken?: string;
   mothers: MotherProfile[];
   loginHistory: LoginRecord[];
 };
@@ -58,6 +60,8 @@ type MotherFormState = {
   village: string;
   rt: string;
   rw: string;
+  latitude: string;
+  longitude: string;
   lastVisit: string;
   notes: string;
   gestationalAgeWeeks: string;
@@ -73,6 +77,8 @@ const INITIAL_FORM: MotherFormState = {
   village: "",
   rt: "",
   rw: "",
+  latitude: "",
+  longitude: "",
   lastVisit: "",
   notes: "",
   gestationalAgeWeeks: "",
@@ -181,7 +187,7 @@ function Icon({
       </svg>
     );
   }
-
+  
   if (name === "clock") {
     return (
       <svg {...common}>
@@ -439,6 +445,7 @@ const inputClass =
 
 export default function AdminDashboardClient({
   currentAdmin,
+  currentAdminQrToken,
   mothers,
   loginHistory,
 }: Props) {
@@ -451,7 +458,40 @@ export default function AdminDashboardClient({
   const [form, setForm] = useState<MotherFormState>(INITIAL_FORM);
   const [formMessage, setFormMessage] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const deferredQuery = useDeferredValue(query);
+  
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Handle click outside to close profile menu
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        profileOpen &&
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node) &&
+        profileButtonRef.current &&
+        !profileButtonRef.current.contains(event.target as Node)
+      ) {
+        setProfileOpen(false);
+      }
+    }
+
+    function handleEscKey(event: KeyboardEvent) {
+      if (profileOpen && event.key === "Escape") {
+        setProfileOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscKey);
+    
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscKey);
+    };
+  }, [profileOpen]);
 
   async function logout() {
     setLoggingOut(true);
@@ -468,12 +508,14 @@ export default function AdminDashboardClient({
     setFormMessage("");
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const age = Number(form.age);
     const gestationalAgeWeeks = Number(form.gestationalAgeWeeks);
     const childAgeMonths = Number(form.childAgeMonths);
+    const latitude = Number(form.latitude);
+    const longitude = Number(form.longitude);
 
     if (!form.fullName.trim() || !form.address.trim() || !form.village.trim()) {
       setFormMessage("Nama, alamat, dan desa/kelurahan wajib diisi.");
@@ -482,6 +524,16 @@ export default function AdminDashboardClient({
 
     if (!Number.isFinite(age) || age < 10 || age > 60) {
       setFormMessage("Umur ibu harus diisi antara 10 sampai 60 tahun.");
+      return;
+    }
+
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      setFormMessage("Latitude harus diisi dengan angka antara -90 sampai 90.");
+      return;
+    }
+
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      setFormMessage("Longitude harus diisi dengan angka antara -180 sampai 180.");
       return;
     }
 
@@ -501,33 +553,43 @@ export default function AdminDashboardClient({
       return;
     }
 
-    const seed = motherData.length + 1;
-    const newMother: MotherProfile = {
-      id: createMotherId(seed),
-      qrCode: createQrCode(seed),
-      fullName: form.fullName.trim(),
-      age,
-      category: form.category,
-      babyLossHistory: form.babyLossHistory,
-      address: form.address.trim(),
-      village: form.village.trim(),
-      rt: form.rt.trim() || "-",
-      rw: form.rw.trim() || "-",
-      latitude: -6.215 + seed * 0.0018,
-      longitude: 106.8454 + seed * 0.0014,
-      lastVisit: form.lastVisit || new Date().toLocaleDateString("id-ID", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-      riskLevel: deriveRiskLevel({ age, babyLossHistory: form.babyLossHistory }),
-      notes: form.notes.trim() || "Belum ada catatan tambahan.",
-      ...(form.category === "hamil" ? { gestationalAgeWeeks } : { childAgeMonths }),
-    };
+    setFormMessage("Menyimpan data ibu...");
 
-    setMotherData((current) => [newMother, ...current]);
-    setForm(INITIAL_FORM);
-    setFormMessage(`Data ${newMother.fullName} berhasil ditambahkan.`);
+    try {
+      const response = await fetch("/api/mothers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: form.fullName.trim(),
+          age,
+          category: form.category,
+          babyLossHistory: form.babyLossHistory,
+          address: form.address.trim(),
+          village: form.village.trim(),
+          rt: form.rt.trim() || "-",
+          rw: form.rw.trim() || "-",
+          latitude,
+          longitude,
+          lastVisit: form.lastVisit,
+          notes: form.notes.trim() || "Belum ada catatan tambahan.",
+          gestationalAgeWeeks: form.category === "hamil" ? gestationalAgeWeeks : undefined,
+          childAgeMonths: form.category === "menyusui" ? childAgeMonths : undefined,
+        }),
+      });
+      const data = (await response.json()) as { mother?: MotherProfile; message?: string };
+
+      if (!response.ok || !data.mother) {
+        setFormMessage(data.message ?? "Data ibu gagal disimpan.");
+        return;
+      }
+
+      setMotherData((current) => [data.mother!, ...current]);
+      setForm(INITIAL_FORM);
+      setFormMessage(`Data ${data.mother.fullName} berhasil disimpan ke database.`);
+      router.refresh();
+    } catch {
+      setFormMessage("Data ibu gagal disimpan karena koneksi server bermasalah.");
+    }
   }
 
   const total = motherData.length;
@@ -566,7 +628,7 @@ export default function AdminDashboardClient({
   const recent = motherData.slice(0, 5);
 
   return (
-      <div className="mx-auto flex min-h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)] sm:min-h-[calc(100vh-2.5rem)]">
+      <div className="mx-auto flex h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)]">
         <aside className="hidden w-[292px] shrink-0 border-r border-slate-200/70 bg-[#fffdf8] lg:flex lg:flex-col">
           <div className="border-b border-slate-100 p-4">
             <div className="flex items-center gap-3 rounded-2xl border border-amber-100 bg-white p-3 shadow-sm">
@@ -613,26 +675,6 @@ export default function AdminDashboardClient({
               </button>
             ))}
           </nav>
-
-          <div className="p-4">
-            <div className="rounded-[1.35rem] bg-gradient-to-br from-amber-500 to-orange-500 p-5 text-white shadow-[0_18px_36px_rgba(245,158,11,0.24)]">
-              <p className="text-sm font-bold">Data aktif</p>
-              <p className="mt-1 text-xs text-amber-50">
-                Total ibu binaan Kecamatan Tegalwaru
-              </p>
-              <p className="mt-5 font-heading text-4xl font-bold">{total}</p>
-              <div className="mt-5 grid grid-cols-2 gap-2 text-center">
-                <div className="rounded-xl bg-white/15 px-2 py-2">
-                  <p className="text-lg font-bold">{pregnant}</p>
-                  <p className="text-[11px] text-amber-50">Hamil</p>
-                </div>
-                <div className="rounded-xl bg-white/15 px-2 py-2">
-                  <p className="text-lg font-bold">{breastfeeding}</p>
-                  <p className="text-[11px] text-amber-50">Menyusui</p>
-                </div>
-              </div>
-            </div>
-          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col bg-[#faf7f0]">
@@ -655,16 +697,33 @@ export default function AdminDashboardClient({
                 <Icon name="bell" className="h-5 w-5" />
                 <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
               </button>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700 ring-1 ring-amber-200/70">
-                  A
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-950">
-                    {currentAdmin.name}
-                  </p>
-                  <p className="text-xs text-slate-500">{currentAdmin.email}</p>
-                </div>
+              <div className="relative flex items-center gap-3 rounded-[1.35rem] border border-slate-100 bg-white px-3 py-2 shadow-sm">
+                <button
+                  ref={profileButtonRef}
+                  type="button"
+                  onClick={() => setProfileOpen((open) => !open)}
+                  className="flex items-center gap-3 rounded-2xl px-1 py-1 text-left transition hover:bg-slate-50"
+                  aria-expanded={profileOpen}
+                  aria-haspopup="menu"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700 ring-1 ring-amber-200/70">
+                    A
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-950">
+                      {currentAdmin.name}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {currentAdmin.email}
+                    </p>
+                  </div>
+                  <Icon
+                    name="chevron"
+                    className={`h-4 w-4 shrink-0 text-slate-300 transition ${
+                      profileOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
                 <button
                   onClick={logout}
                   disabled={loggingOut}
@@ -672,6 +731,41 @@ export default function AdminDashboardClient({
                 >
                   {loggingOut ? "Keluar..." : "Keluar"}
                 </button>
+                
+                {/* QR Menu - positioned relative to parent container, with higher z-index */}
+                {currentAdminQrToken && (
+                  <div
+                    ref={profileMenuRef}
+                    className={`absolute right-0 top-[calc(100%+0.75rem)] z-[100] w-80 origin-top-right rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.2)] transition-all duration-200 ${
+                      profileOpen
+                        ? "scale-100 opacity-100 visible"
+                        : "scale-95 opacity-0 invisible pointer-events-none"
+                    }`}
+                    role="menu"
+                    style={{ isolation: "isolate" }}
+                  >
+                    <div className="mb-4 border-b border-slate-100 pb-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">
+                        QR Login Admin
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-slate-950">
+                        {currentAdmin.name}
+                      </p>
+                      <p className="text-xs text-slate-500">{currentAdmin.email}</p>
+                    </div>
+                    <div className="flex justify-center">
+                      <QrBadge
+                        value={currentAdminQrToken}
+                        size={200}
+                        downloadName={`qr-login-${currentAdmin.email}.png`}
+                        showDownload
+                      />
+                    </div>
+                    <p className="mt-4 text-center text-xs leading-5 text-slate-500">
+                      Tunjukkan QR ini saat login dengan kamera. QR ini bersifat rahasia.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </header>
@@ -732,27 +826,6 @@ export default function AdminDashboardClient({
                     Informasi yang paling perlu dilihat
                   </h2>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <select
-                    value={catF}
-                    onChange={(event) => setCatF(event.target.value)}
-                    className="rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
-                  >
-                    <option value="semua">Semua kategori</option>
-                    <option value="hamil">Ibu hamil</option>
-                    <option value="menyusui">Ibu menyusui</option>
-                  </select>
-                  <select
-                    value={riskF}
-                    onChange={(event) => setRiskF(event.target.value)}
-                    className="rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
-                  >
-                    <option value="semua">Semua risiko</option>
-                    <option value="rendah">Risiko rendah</option>
-                    <option value="sedang">Risiko sedang</option>
-                    <option value="tinggi">Risiko tinggi</option>
-                  </select>
-                </div>
               </div>
 
               {section === "ringkasan" && (
@@ -807,7 +880,7 @@ export default function AdminDashboardClient({
                         </button>
                       </div>
                       <div className="[&>div]:h-full [&>div]:min-h-[360px] [&>div]:border-slate-100 [&>div]:bg-slate-50 [&_[aria-label]]:h-[360px]">
-                        <MapCard />
+                        <MapCard mothers={motherData} />
                       </div>
                     </div>
                   </div>
@@ -871,15 +944,48 @@ export default function AdminDashboardClient({
 
                       <div className="p-4">
                         <p className="text-sm font-bold text-slate-950">
-                          Tingkat risiko
+                          Log akses terbaru
                         </p>
-                        <div className="mt-7">
-                          <RiskRows
-                            highRisk={highRisk}
-                            midRisk={midRisk}
-                            lowRisk={lowRisk}
-                            total={total}
-                          />
+                        <p className="text-xs text-slate-500">
+                          Informasi audit login admin terakhir
+                        </p>
+                        <div className="mt-4 space-y-3">
+                          {loginHistory.slice(0, 3).map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-950">
+                                    {item.adminName}
+                                  </p>
+                                  <p className="truncate text-xs text-slate-500">
+                                    {item.adminEmail}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-1 text-xs font-bold ${
+                                    item.status === "success"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-rose-50 text-rose-700"
+                                  }`}
+                                >
+                                  {item.status === "success" ? "Berhasil" : "Gagal"}
+                                </span>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                                <span>{item.method === "email" ? "Email" : "QR Code"}</span>
+                                <span>{item.timestamp}</span>
+                                <span>{item.device}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {!loginHistory.length && (
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5 text-center text-sm text-slate-500">
+                              Belum ada riwayat login.
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -965,7 +1071,7 @@ export default function AdminDashboardClient({
                       {filtered.length || total} titik
                     </span>
                   </div>
-                  <MapCard />
+                  <MapCard mothers={filtered.length ? filtered : motherData} />
                 </div>
               )}
 
@@ -1088,6 +1194,26 @@ export default function AdminDashboardClient({
                           placeholder="Jl. Melati No. 8"
                         />
                       </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Latitude" helper="Contoh: -6.6716735">
+                          <input
+                            value={form.latitude}
+                            onChange={(event) => updateForm("latitude", event.target.value)}
+                            className={inputClass}
+                            inputMode="decimal"
+                            placeholder="-6.6716735"
+                          />
+                        </Field>
+                        <Field label="Longitude" helper="Contoh: 107.3568055">
+                          <input
+                            value={form.longitude}
+                            onChange={(event) => updateForm("longitude", event.target.value)}
+                            className={inputClass}
+                            inputMode="decimal"
+                            placeholder="107.3568055"
+                          />
+                        </Field>
+                      </div>
                       <Field label={form.category === "hamil" ? "Usia kehamilan" : "Usia anak"} helper={form.category === "hamil" ? "Dalam minggu." : "Dalam bulan."}>
                         <input
                           value={form.category === "hamil" ? form.gestationalAgeWeeks : form.childAgeMonths}
@@ -1158,6 +1284,7 @@ export default function AdminDashboardClient({
                       <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600">
                         <span>Wilayah: {form.village || "Belum diisi"}</span>
                         <span>RT/RW: {form.rt || "-"}/{form.rw || "-"}</span>
+                        <span>Koordinat: {form.latitude || "-"}, {form.longitude || "-"}</span>
                         <span>Riwayat: {formatBabyHistoryLabel(form.babyLossHistory)}</span>
                         <span>
                           Risiko estimasi: {form.age ? formatRiskLabel(deriveRiskLevel({ age: Number(form.age), babyLossHistory: form.babyLossHistory })) : "-"}

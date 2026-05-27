@@ -1,6 +1,6 @@
 import AdminDashboardClient from "@/components/AdminDashboardClient";
 import { getAdminSession } from "@/lib/auth";
-import { getDashboardSeed } from "@/services/api";
+import { getAdminDirectory, getDashboardSeed } from "@/services/api";
 import { redirect } from "next/navigation";
 
 export const metadata = {
@@ -16,11 +16,16 @@ export default async function DashboardPage() {
     redirect("/login?redirect=/dashboard");
   }
 
-  const { mothers, loginHistory } = await getDashboardSeed();
+  const [{ mothers, loginHistory }, admins] = await Promise.all([
+    getDashboardSeed(),
+    getAdminDirectory(),
+  ]);
+  const currentAdminQrToken = admins.find((admin) => admin.id === session.id)?.qrToken;
 
   return (
     <AdminDashboardClient
       currentAdmin={session}
+      currentAdminQrToken={currentAdminQrToken}
       mothers={mothers}
       loginHistory={loginHistory}
     />

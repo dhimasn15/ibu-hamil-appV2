@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { LatLngExpression, Map as LeafletMap } from 'leaflet';
+import type { MotherProfile } from '@/lib/types';
+import { formatCategoryLabel, formatRiskLabel } from '@/lib/utils';
+
+type MapCardProps = {
+  mothers?: MotherProfile[];
+};
 
 // Center of Kecamatan Tegalwaru, Purwakarta (from Google Maps)
 const TEGALWARU_CENTER: LatLngExpression = [-6.6716735, 107.3568055];
@@ -43,7 +49,7 @@ const TEGALWARU_BOUNDARY: [number, number][] = [
   // South-southwest (near Keraja)
   [-6.7470, 107.3115],
   [-6.7390, 107.3050],
-  [-6.7300, 107.3008],
+  [-6.7300, 107.3008], 
   [-6.7200, 107.2978],
   [-6.7080, 107.2945],
   // West - jagged border (distinctive feature from image)
@@ -79,7 +85,7 @@ const TEGALWARU_BOUNDARY: [number, number][] = [
   [-6.5488, 107.4155],
 ];
 
-export default function MapCard() {
+export default function MapCard({ mothers = [] }: MapCardProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<LeafletMap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -178,6 +184,40 @@ export default function MapCard() {
             .addTo(map);
         });
 
+        mothers.forEach((mother) => {
+          if (!Number.isFinite(mother.latitude) || !Number.isFinite(mother.longitude)) {
+            return;
+          }
+
+          const markerColor = mother.riskLevel === 'tinggi'
+            ? '#e11d48'
+            : mother.riskLevel === 'sedang'
+              ? '#f59e0b'
+              : '#059669';
+          const icon = L.divIcon({
+            html: `<div style="
+              width:20px;
+              height:20px;
+              border-radius:999px;
+              background:${markerColor};
+              border:3px solid white;
+              box-shadow:0 4px 12px rgba(15,23,42,0.35);
+            "></div>`,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10],
+            className: '',
+          });
+
+          L.marker([mother.latitude, mother.longitude], {
+            icon,
+            title: mother.fullName,
+          })
+            .bindPopup(
+              `<strong>${mother.fullName}</strong><br/>${formatCategoryLabel(mother.category)}<br/>RT ${mother.rt}/RW ${mother.rw}, ${mother.village}<br/><span style="color:${markerColor};font-weight:700">${formatRiskLabel(mother.riskLevel)}</span>`,
+            )
+            .addTo(map);
+        });
+
         // Label overlay (place names)
         L.tileLayer(
           'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
@@ -197,7 +237,15 @@ export default function MapCard() {
 
         setTimeout(() => {
           map.invalidateSize();
-          map.fitBounds(boundaryPolygon.getBounds(), { padding: [24, 24] });
+          const motherBounds = mothers
+            .filter((mother) => Number.isFinite(mother.latitude) && Number.isFinite(mother.longitude))
+            .map((mother) => [mother.latitude, mother.longitude] as [number, number]);
+
+          if (motherBounds.length) {
+            map.fitBounds(L.latLngBounds([...TEGALWARU_BOUNDARY, ...motherBounds]), { padding: [24, 24] });
+          } else {
+            map.fitBounds(boundaryPolygon.getBounds(), { padding: [24, 24] });
+          }
         }, 300);
 
         setIsLoading(false);
@@ -216,7 +264,7 @@ export default function MapCard() {
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [mothers]);
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
@@ -234,7 +282,7 @@ export default function MapCard() {
       {/* Legend */}
       <div className="absolute bottom-8 right-2 z-[1000] flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm backdrop-blur-sm">
         <span className="h-2 w-6 rounded-full border-2 border-dashed border-red-500 bg-red-500/10" />
-        Batas Kec. Tegalwaru
+        Batas & titik ibu
       </div>
     </div>
   );
