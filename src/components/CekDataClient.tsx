@@ -51,6 +51,10 @@ const CATEGORY_COLORS: Record<string, { badge: string }> = {
   menyusui: { badge: "bg-teal-100 text-teal-700" },
 };
 
+function GoogleIcon({ name, className = "text-lg" }: { name: string; className?: string }) {
+  return <span className={`material-symbols-rounded leading-none ${className}`}>{name}</span>;
+}
+
 function ScannerFrame({
   scanning,
   videoRef,
@@ -492,7 +496,10 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
-                    {mode === "scan" ? "📷  Scan QR" : "⌨️  Kode Manual"}
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <GoogleIcon name={mode === "scan" ? "photo_camera" : "keyboard"} />
+                      {mode === "scan" ? "Scan QR" : "Kode Manual"}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -647,9 +654,21 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
                     : "border-rose-200 bg-rose-50 text-rose-700"
                 }`}
               >
-                {step === "scanning" && "🔍  Memindai kode…"}
-                {step === "found" && `✅  Data ditemukan — ${found?.fullName}`}
-                {step === "not_found" && "❌  Kode tidak ditemukan. Pastikan kode benar."}
+                {step === "scanning" && (
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleIcon name="search" /> Memindai kode...
+                  </span>
+                )}
+                {step === "found" && (
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleIcon name="check_circle" /> Data ditemukan - {found?.fullName}
+                  </span>
+                )}
+                {step === "not_found" && (
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleIcon name="cancel" /> Kode tidak ditemukan. Pastikan kode benar.
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -695,17 +714,17 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {[
               {
-                icon: "🪪",
+                icon: "badge",
                 title: "Siapkan kartu ibu",
                 desc: "Pastikan kartu QR yang dibagikan kader ada di tangan Anda.",
               },
               {
-                icon: "📷",
+                icon: "photo_camera",
                 title: "Scan atau ketik kode",
                 desc: "Gunakan kamera atau masukkan kode unik yang tercetak di kartu.",
               },
               {
-                icon: "📋",
+                icon: "assignment",
                 title: "Lihat data Anda",
                 desc: "Data kehamilan, kunjungan, dan catatan kader akan langsung tampil.",
               },
@@ -715,7 +734,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
                 className="flex items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4"
               >
                 <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-lg">
-                  {icon}
+                  <GoogleIcon name={icon} />
                 </span>
                 <div>
                   <p className="font-semibold text-slate-800">{title}</p>

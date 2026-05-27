@@ -9,6 +9,10 @@ type LoginClientProps = {
   admins: AdminUser[];
 };
 
+function GoogleIcon({ name, className = "text-lg" }: { name: string; className?: string }) {
+  return <span className={`material-symbols-rounded leading-none ${className}`}>{name}</span>;
+}
+
 type BarcodeDetectorConstructor = new (options: {
   formats: string[];
 }) => {
@@ -252,7 +256,10 @@ export default function LoginClient({ admins }: LoginClientProps) {
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
-                    {m === "email" ? "📧  Login Email" : "📱  Login QR"}
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <GoogleIcon name={m === "email" ? "mail" : "qr_code_scanner"} />
+                      {m === "email" ? "Login Email" : "Login QR"}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -410,7 +417,10 @@ export default function LoginClient({ admins }: LoginClientProps) {
                       : "border-rose-200 bg-rose-50 text-rose-700"
                   }`}
                 >
-                  {result.includes("berhasil") ? "✅" : "❌"} {result}
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleIcon name={result.includes("berhasil") ? "check_circle" : "cancel"} />
+                    {result}
+                  </span>
                 </div>
               )}
             </div>
@@ -523,7 +533,7 @@ export default function LoginClient({ admins }: LoginClientProps) {
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="flex items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-lg">
-                🔐
+                <GoogleIcon name="lock" />
               </span>
               <div>
                 <p className="font-semibold text-slate-800">Login aman</p>
@@ -534,7 +544,7 @@ export default function LoginClient({ admins }: LoginClientProps) {
             </div>
             <div className="flex items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-lg">
-                📱
+                <GoogleIcon name="qr_code_2" />
               </span>
               <div>
                 <p className="font-semibold text-slate-800">QR Code unik</p>

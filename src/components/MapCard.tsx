@@ -150,16 +150,16 @@ export default function MapCard({ mothers = [] }: MapCardProps) {
         map.fitBounds(boundaryPolygon.getBounds(), { padding: [24, 24] });
 
         // Landmark markers
-        const landmarks: { coords: [number, number]; name: string; emoji: string }[] = [
-          { coords: [-6.5540, 107.4118], name: 'Curug Suhada Purwakarta', emoji: '🏞️' },
-          { coords: [-6.5850, 107.3320], name: 'Badega Gunung Parang', emoji: '⛰️' },
-          { coords: [-6.6390, 107.3530], name: 'Wisata Alam Gunung Bongkok', emoji: '🌿' },
-          { coords: [-6.6610, 107.4010], name: 'Pasar Citeko', emoji: '🛒' },
-          { coords: [-6.7320, 107.3120], name: 'Keraja', emoji: '📍' },
-          { coords: [-6.6716735, 107.3568055], name: 'Pusat Kec. Tegalwaru', emoji: '🏛️' },
+        const landmarks: { coords: [number, number]; name: string; icon: string }[] = [
+          { coords: [-6.5540, 107.4118], name: 'Curug Suhada Purwakarta', icon: 'landscape' },
+          { coords: [-6.5850, 107.3320], name: 'Badega Gunung Parang', icon: 'terrain' },
+          { coords: [-6.6390, 107.3530], name: 'Wisata Alam Gunung Bongkok', icon: 'forest' },
+          { coords: [-6.6610, 107.4010], name: 'Pasar Citeko', icon: 'shopping_cart' },
+          { coords: [-6.7320, 107.3120], name: 'Keraja', icon: 'location_on' },
+          { coords: [-6.6716735, 107.3568055], name: 'Pusat Kec. Tegalwaru', icon: 'account_balance' },
         ];
 
-        landmarks.forEach(({ coords, name, emoji }) => {
+        landmarks.forEach(({ coords, name, icon: landmarkIcon }) => {
           const icon = L.divIcon({
             html: `<div style="
               background:white;
@@ -173,14 +173,14 @@ export default function MapCard({ mothers = [] }: MapCardProps) {
               font-size:14px;
               box-shadow:0 2px 6px rgba(0,0,0,0.35);
               cursor:pointer;
-            ">${emoji}</div>`,
+            "><span class="material-symbols-rounded" style="font-size:17px;line-height:1">${landmarkIcon}</span></div>`,
             iconSize: [28, 28],
             iconAnchor: [14, 14],
             className: '',
           });
 
           L.marker(coords, { icon, title: name })
-            .bindPopup(`<strong>${emoji} ${name}</strong><br/><span style="color:#64748b;font-size:12px">Kec. Tegalwaru, Purwakarta</span>`)
+            .bindPopup(`<strong><span class="material-symbols-rounded" style="font-size:16px;vertical-align:-3px">${landmarkIcon}</span> ${name}</strong><br/><span style="color:#64748b;font-size:12px">Kec. Tegalwaru, Purwakarta</span>`)
             .addTo(map);
         });
 
