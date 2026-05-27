@@ -65,7 +65,7 @@ function ScannerFrame({
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
 }) {
   return (
-    <div className="relative mx-auto h-64 w-64 sm:h-72 sm:w-72">
+    <div className="relative mx-auto h-56 w-56 sm:h-72 sm:w-72">
       {/* Corner marks */}
       {[
         "top-0 left-0 border-t-4 border-l-4 rounded-tl-2xl",
@@ -464,9 +464,9 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
 
       <div className="flex flex-col gap-8">
         {/* ── Hero ─────────────────────────────────────────── */}
-        <section className="surface-card-strong rounded-[2rem] p-6 sm:p-10">
+        <section className="surface-card-strong rounded-[1.5rem] p-5 sm:rounded-[2rem] sm:p-10">
           <p className="section-kicker">Portal ibu</p>
-          <h1 className="mt-4 font-heading text-4xl font-bold text-slate-900 sm:text-5xl">
+          <h1 className="mt-4 font-heading text-3xl font-bold text-slate-900 sm:text-5xl">
             Cek data kesehatan Ibu
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-500">
@@ -479,7 +479,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
         <div className="grid gap-6 lg:grid-cols-[1fr_1.3fr]">
           {/* Left – scanner / input */}
           <div className="flex flex-col gap-4">
-            <div className="surface-card-strong rounded-[1.75rem] p-6">
+            <div className="surface-card-strong rounded-[1.5rem] p-4 sm:rounded-[1.75rem] sm:p-6">
               {/* Tab switch */}
               <div className="mb-6 flex rounded-2xl bg-slate-100 p-1">
                 {(["scan", "manual"] as const).map((mode) => (
@@ -541,27 +541,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
                   )}
 
                   {/* Demo quick-scan */}
-                  <div className="w-full border-t border-slate-100 pt-4">
-                    <p className="mb-3 text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Demo — pilih QR ibu
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {demoMothers.map((m) => (
-                        <button
-                          key={m.id}
-                          id={`demo-${m.qrCode}`}
-                          onClick={() => simulateScan(m.qrCode)}
-                          disabled={step === "scanning"}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 disabled:opacity-40"
-                        >
-                          <span className="font-semibold">{m.fullName}</span>
-                          <span className="font-mono text-xs text-slate-400">
-                            {m.qrCode}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  
                 </div>
               )}
 
@@ -674,7 +654,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
           </div>
 
           {/* Right – result */}
-          <div className="surface-card-strong rounded-[1.75rem] p-6">
+          <div className="surface-card-strong rounded-[1.5rem] p-4 sm:rounded-[1.75rem] sm:p-6">
             {step !== "found" || !found ? (
               <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-4 text-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
@@ -709,7 +689,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
         </div>
 
         {/* ── Info footer ──────────────────────────────────── */}
-        <section className="rounded-[1.75rem] border border-slate-100 bg-white/80 p-6">
+        <section className="rounded-[1.5rem] border border-slate-100 bg-white/80 p-4 sm:rounded-[1.75rem] sm:p-6">
           <p className="section-kicker">Cara penggunaan</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {[

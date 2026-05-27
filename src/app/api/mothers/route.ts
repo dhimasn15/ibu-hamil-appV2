@@ -11,6 +11,9 @@ const babyHistories: BabyLossHistory[] = [
   "bayi_<1_tahun",
 ];
 
+const defaultLatitude = -6.6716735;
+const defaultLongitude = 107.3568055;
+
 function formatMotherVisit(date: Date) {
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
@@ -30,8 +33,10 @@ export async function POST(request: Request) {
     const address = String(body.address ?? "").trim();
     const village = String(body.village ?? "").trim();
     const age = Number(body.age);
-    const latitude = Number(body.latitude);
-    const longitude = Number(body.longitude);
+    const hasLatitude = body.latitude !== undefined && body.latitude !== null && String(body.latitude).trim() !== "";
+    const hasLongitude = body.longitude !== undefined && body.longitude !== null && String(body.longitude).trim() !== "";
+    const latitude = hasLatitude ? Number(body.latitude) : defaultLatitude;
+    const longitude = hasLongitude ? Number(body.longitude) : defaultLongitude;
     const category = categories.includes(body.category) ? body.category : undefined;
     const babyLossHistory = babyHistories.includes(body.babyLossHistory)
       ? body.babyLossHistory
@@ -58,14 +63,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    if (hasLatitude && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) {
       return NextResponse.json(
         { message: "Latitude harus diisi dengan angka antara -90 sampai 90." },
         { status: 400 },
       );
     }
 
-    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    if (hasLongitude && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)) {
       return NextResponse.json(
         { message: "Longitude harus diisi dengan angka antara -180 sampai 180." },
         { status: 400 },

@@ -26,6 +26,7 @@ import {
 } from "@/lib/utils";
 import MapCard from "@/components/MapCard";
 import QrBadge from "@/components/QrBadge";
+import CekDataClient from "@/components/CekDataClient";
 
 type Props = {
   currentAdmin: AdminSession;
@@ -37,6 +38,7 @@ type Props = {
 type Section =
   | "ringkasan"
   | "data-ibu"
+  | "cek-data"
   | "tambah-data"
   | "peta"
   | "statistik"
@@ -45,6 +47,7 @@ type Section =
 const NAV = [
   { id: "ringkasan", label: "Ringkasan", icon: "grid" },
   { id: "data-ibu", label: "Data Ibu", icon: "users" },
+  { id: "cek-data", label: "Cek Data Ibu", icon: "search" },
   { id: "tambah-data", label: "Tambah Data", icon: "plus" },
   { id: "peta", label: "Peta Wilayah", icon: "map" },
   { id: "statistik", label: "Statistik", icon: "chart" },
@@ -62,6 +65,7 @@ type MotherFormState = {
   rw: string;
   latitude: string;
   longitude: string;
+  mapsLink: string;
   lastVisit: string;
   notes: string;
   gestationalAgeWeeks: string;
@@ -79,6 +83,7 @@ const INITIAL_FORM: MotherFormState = {
   rw: "",
   latitude: "",
   longitude: "",
+  mapsLink: "",
   lastVisit: "",
   notes: "",
   gestationalAgeWeeks: "",
@@ -443,6 +448,19 @@ function Field({
 const inputClass =
   "rounded-2xl border border-slate-200/80 bg-white px-4 py-3 font-normal text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70";
 
+function extractCoordinatesFromMapsLink(value: string) {
+  const atMatch = value.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  if (atMatch) return { latitude: atMatch[1], longitude: atMatch[2] };
+
+  const queryMatch = value.match(/[?&](?:q|query)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  if (queryMatch) return { latitude: queryMatch[1], longitude: queryMatch[2] };
+
+  const bangMatch = value.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (bangMatch) return { latitude: bangMatch[1], longitude: bangMatch[2] };
+
+  return null;
+}
+
 export default function AdminDashboardClient({
   currentAdmin,
   currentAdminQrToken,
@@ -454,7 +472,10 @@ export default function AdminDashboardClient({
   const [section, setSection] = useState<Section>("ringkasan");
   const [query, setQuery] = useState("");
   const [catF, setCatF] = useState("semua");
-  const [riskF, setRiskF] = useState("semua");
+  const [riskF] = useState("semua");
+  const [ageF, setAgeF] = useState("");
+  const [babyHistoryF, setBabyHistoryF] = useState("semua");
+  const [rtRwF, setRtRwF] = useState("");
   const [form, setForm] = useState<MotherFormState>(INITIAL_FORM);
   const [formMessage, setFormMessage] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
@@ -509,14 +530,34 @@ export default function AdminDashboardClient({
     setFormMessage("");
   }
 
+  function updateMapsLink(value: string) {
+    const coordinates = extractCoordinatesFromMapsLink(value);
+
+    setForm((current) => ({
+      ...current,
+      mapsLink: value,
+      latitude: coordinates?.latitude ?? current.latitude,
+      longitude: coordinates?.longitude ?? current.longitude,
+    }));
+
+    setFormMessage(
+      value.trim() && !coordinates
+        ? "Link Maps belum terbaca. Pastikan link berisi koordinat, atau isi latitude/longitude manual."
+        : "",
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const age = Number(form.age);
     const gestationalAgeWeeks = Number(form.gestationalAgeWeeks);
     const childAgeMonths = Number(form.childAgeMonths);
-    const latitude = Number(form.latitude);
-    const longitude = Number(form.longitude);
+    const mapsCoordinates = extractCoordinatesFromMapsLink(form.mapsLink);
+    const latitudeValue = mapsCoordinates?.latitude ?? form.latitude;
+    const longitudeValue = mapsCoordinates?.longitude ?? form.longitude;
+    const latitude = latitudeValue === "" ? Number.NaN : Number(latitudeValue);
+    const longitude = longitudeValue === "" ? Number.NaN : Number(longitudeValue);
 
     if (!form.fullName.trim() || !form.address.trim() || !form.village.trim()) {
       setFormMessage("Nama, alamat, dan desa/kelurahan wajib diisi.");
@@ -528,12 +569,12 @@ export default function AdminDashboardClient({
       return;
     }
 
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    if (latitudeValue && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) {
       setFormMessage("Latitude harus diisi dengan angka antara -90 sampai 90.");
       return;
     }
 
-    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    if (longitudeValue && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)) {
       setFormMessage("Longitude harus diisi dengan angka antara -180 sampai 180.");
       return;
     }
@@ -569,8 +610,8 @@ export default function AdminDashboardClient({
           village: form.village.trim(),
           rt: form.rt.trim() || "-",
           rw: form.rw.trim() || "-",
-          latitude,
-          longitude,
+          latitude: Number.isFinite(latitude) ? latitude : undefined,
+          longitude: Number.isFinite(longitude) ? longitude : undefined,
           lastVisit: form.lastVisit,
           notes: form.notes.trim() || "Belum ada catatan tambahan.",
           gestationalAgeWeeks: form.category === "hamil" ? gestationalAgeWeeks : undefined,
@@ -604,16 +645,34 @@ export default function AdminDashboardClient({
     () =>
       motherData.filter((mother) => {
         const keyword = deferredQuery.toLowerCase();
+        const rtRwKeyword = rtRwF.toLowerCase().replace(/\s+/g, "");
+        const rtRwValue = `${mother.rt}/${mother.rw}`.toLowerCase().replace(/\s+/g, "");
+        const age = Number(ageF);
         const matchesQuery =
           mother.fullName.toLowerCase().includes(keyword) ||
           mother.village.toLowerCase().includes(keyword) ||
           mother.address.toLowerCase().includes(keyword);
         const matchesCategory = catF === "semua" || mother.category === catF;
         const matchesRisk = riskF === "semua" || mother.riskLevel === riskF;
+        const matchesAge = !ageF || (Number.isFinite(age) && mother.age === age);
+        const matchesBabyHistory =
+          babyHistoryF === "semua" || mother.babyLossHistory === babyHistoryF;
+        const matchesRtRw =
+          !rtRwKeyword ||
+          mother.rt.toLowerCase().includes(rtRwKeyword) ||
+          mother.rw.toLowerCase().includes(rtRwKeyword) ||
+          rtRwValue.includes(rtRwKeyword);
 
-        return matchesQuery && matchesCategory && matchesRisk;
+        return (
+          matchesQuery &&
+          matchesCategory &&
+          matchesRisk &&
+          matchesAge &&
+          matchesBabyHistory &&
+          matchesRtRw
+        );
       }),
-    [catF, deferredQuery, motherData, riskF],
+    [ageF, babyHistoryF, catF, deferredQuery, motherData, riskF, rtRwF],
   );
 
   const topVillage = useMemo(() => {
@@ -630,7 +689,7 @@ export default function AdminDashboardClient({
 
     return (
       <>
-      <div className="mx-auto flex h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)] lg:h-screen">
         <aside className="hidden w-[292px] shrink-0 border-r border-slate-200/70 bg-[#fffdf8] lg:flex lg:flex-col">
           <div className="border-b border-slate-100 p-4">
             <div className="flex items-center gap-3 rounded-2xl border border-amber-100 bg-white p-3 shadow-sm">
@@ -650,15 +709,6 @@ export default function AdminDashboardClient({
           </div>
 
           <div className="border-b border-slate-100 p-4">
-            <label className="flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white px-3 py-2.5 text-sm text-slate-400 shadow-sm">
-              <Icon name="search" className="h-4 w-4" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-slate-700 outline-none placeholder:text-slate-400"
-                placeholder="Cari nama atau desa..."
-              />
-            </label>
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 p-3">
@@ -680,18 +730,9 @@ export default function AdminDashboardClient({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col bg-[#faf7f0]">
-          <header className="flex flex-col gap-4 border-b border-slate-200/70 bg-white px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
-            <label className="flex max-w-xl flex-1 items-center gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 text-slate-400 transition focus-within:border-amber-300 focus-within:bg-white focus-within:shadow-sm">
-              <Icon name="search" className="h-5 w-5 shrink-0" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent py-2.5 text-base text-slate-700 outline-none placeholder:text-slate-400"
-                placeholder="Cari nama ibu, desa, atau alamat"
-              />
-            </label>
+          <header className="flex flex-col gap-4 border-b border-slate-200/70 bg-white px-3 py-3 sm:px-6 sm:py-4 xl:flex-row xl:items-center xl:justify-between">
 
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <div className="flex items-center justify-between gap-2 sm:justify-end sm:gap-3">
               <button
                 className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
                 aria-label="Notifikasi"
@@ -699,19 +740,19 @@ export default function AdminDashboardClient({
                 <Icon name="bell" className="h-5 w-5" />
                 <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
               </button>
-              <div className="relative flex items-center gap-3 rounded-[1.35rem] border border-slate-100 bg-white px-3 py-2 shadow-sm">
+              <div className="relative flex min-w-0 flex-1 items-center justify-between gap-2 rounded-[1.35rem] border border-slate-100 bg-white px-2 py-2 shadow-sm sm:flex-none sm:gap-3 sm:px-3">
                 <button
                   ref={profileButtonRef}
                   type="button"
                   onClick={() => setProfileOpen((open) => !open)}
-                  className="flex items-center gap-3 rounded-2xl px-1 py-1 text-left transition hover:bg-slate-50"
+                  className="flex min-w-0 items-center gap-2 rounded-2xl px-1 py-1 text-left transition hover:bg-slate-50 sm:gap-3"
                   aria-expanded={profileOpen}
                   aria-haspopup="menu"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700 ring-1 ring-amber-200/70">
                     A
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 max-w-[135px] sm:max-w-none">
                     <p className="truncate text-sm font-bold text-slate-950">
                       {currentAdmin.name}
                     </p>
@@ -729,7 +770,7 @@ export default function AdminDashboardClient({
                 <button
                   onClick={logout}
                   disabled={loggingOut}
-                  className="rounded-full border border-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:border-rose-100 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-60"
+                  className="shrink-0 rounded-full border border-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-500 transition hover:border-rose-100 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-60 sm:px-3"
                 >
                   {loggingOut ? "Keluar..." : "Keluar"}
                 </button>
@@ -738,7 +779,7 @@ export default function AdminDashboardClient({
                 {currentAdminQrToken && (
                   <div
                     ref={profileMenuRef}
-                    className={`absolute right-0 top-[calc(100%+0.75rem)] z-[100] w-80 origin-top-right rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.2)] transition-all duration-200 ${
+                    className={`absolute right-0 top-[calc(100%+0.75rem)] z-[100] w-[calc(100vw-2rem)] max-w-80 origin-top-right rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.2)] transition-all duration-200 ${
                       profileOpen
                         ? "scale-100 opacity-100 visible"
                         : "scale-95 opacity-0 invisible pointer-events-none"
@@ -773,14 +814,14 @@ export default function AdminDashboardClient({
           </header>
 
           <main className="min-w-0 flex-1 overflow-y-auto">
-            <section className="border-b border-slate-100 bg-white px-4 py-5 sm:px-6">
+            <section className="border-b border-slate-100 bg-white px-3 py-4 sm:px-6 sm:py-5">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500 text-lg font-bold text-white shadow-[0_10px_22px_rgba(245,158,11,0.24)]">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-base font-bold text-white shadow-[0_10px_22px_rgba(245,158,11,0.24)] sm:h-12 sm:w-12 sm:text-lg">
                     B
                   </div>
                   <div>
-                    <h1 className="font-heading text-2xl font-bold text-slate-950">
+                    <h1 className="font-heading text-xl font-bold text-slate-950 sm:text-2xl">
                       Dashboard Pemantauan Ibu
                     </h1>
                     <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
@@ -801,7 +842,7 @@ export default function AdminDashboardClient({
                 </div>
               </div>
 
-              <div className="mt-6 flex gap-2 overflow-x-auto rounded-2xl bg-slate-50 p-1">
+              <div className="mt-5 flex gap-2 overflow-x-auto rounded-2xl bg-slate-50 p-1 sm:mt-6">
                 {NAV.map((item) => (
                   <button
                     key={item.id}
@@ -818,7 +859,7 @@ export default function AdminDashboardClient({
               </div>
             </section>
 
-            <section className="p-4 sm:p-6">
+            <section className="p-3 sm:p-6">
               <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700/80">
@@ -859,7 +900,7 @@ export default function AdminDashboardClient({
                     />
                   </div>
 
-                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
+                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-3 shadow-[0_14px_34px_rgba(15,23,42,0.05)] sm:p-5">
                     <div className="grid gap-5 xl:grid-cols-[220px_1fr]">
                       <div className="flex flex-col justify-between gap-6">
                         <div>
@@ -881,7 +922,7 @@ export default function AdminDashboardClient({
                           Refresh data
                         </button>
                       </div>
-                      <div className="[&>div]:h-full [&>div]:min-h-[360px] [&>div]:border-slate-100 [&>div]:bg-slate-50 [&_[aria-label]]:h-[360px]">
+                      <div className="[&>div]:h-full [&>div]:min-h-[280px] [&>div]:border-slate-100 [&>div]:bg-slate-50 [&_[aria-label]]:h-[280px] sm:[&>div]:min-h-[360px] sm:[&_[aria-label]]:h-[360px]">
                         <MapCard mothers={motherData} />
                       </div>
                     </div>
@@ -1008,7 +1049,132 @@ export default function AdminDashboardClient({
                       {filtered.length} data
                     </span>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="border-b border-slate-100 bg-slate-50/50 p-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 xl:col-span-2">
+                        Nama
+                        <input
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          placeholder="Cari nama ibu"
+                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                        Umur
+                        <input
+                          value={ageF}
+                          onChange={(event) => setAgeF(event.target.value.replace(/\D/g, ""))}
+                          inputMode="numeric"
+                          placeholder="Contoh 28"
+                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                        Kategori
+                        <select
+                          value={catF}
+                          onChange={(event) => setCatF(event.target.value)}
+                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
+                        >
+                          <option value="semua">Semua</option>
+                          <option value="hamil">Ibu hamil</option>
+                          <option value="menyusui">Ibu menyusui</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 xl:col-span-2">
+                        Riwayat kematian bayi
+                        <select
+                          value={babyHistoryF}
+                          onChange={(event) => setBabyHistoryF(event.target.value)}
+                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
+                        >
+                          <option value="semua">Semua</option>
+                          <option value="tidak_ada">Tidak ada</option>
+                          <option value="keguguran">Keguguran</option>
+                          <option value="bayi_&lt;3_bulan">Bayi &lt; 3 bulan</option>
+                          <option value="bayi_&lt;1_tahun">Bayi &lt; 1 tahun</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                        RT/RW
+                        <input
+                          value={rtRwF}
+                          onChange={(event) => setRtRwF(event.target.value)}
+                          placeholder="01/02"
+                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100/70"
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuery("");
+                            setAgeF("");
+                            setCatF("semua");
+                            setBabyHistoryF("semua");
+                            setRtRwF("");
+                          }}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          Reset filter
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 p-3 md:hidden">
+                    {filtered.map((mother) => (
+                      <div
+                        key={mother.id}
+                        className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-slate-950">{mother.fullName}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {mother.village}, RT {mother.rt}/RW {mother.rw}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${RISK_STYLE[mother.riskLevel].pill}`}>
+                            {formatRiskLabel(mother.riskLevel)}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Umur</p>
+                            <p className="mt-1 font-semibold text-slate-700">{mother.age} tahun</p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Kategori</p>
+                            <p className="mt-1 font-semibold text-slate-700">{formatCategoryLabel(mother.category)}</p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Riwayat</p>
+                            <p className="mt-1 font-semibold text-slate-700">{formatBabyHistoryLabel(mother.babyLossHistory)}</p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Kunjungan</p>
+                            <p className="mt-1 font-semibold text-slate-700">{mother.lastVisit}</p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedQrMother(mother)}
+                          className="mt-4 w-full rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100"
+                        >
+                          Lihat QR Ibu
+                        </button>
+                      </div>
+                    ))}
+                    {!filtered.length && (
+                      <div className="rounded-2xl border border-slate-100 bg-white px-5 py-10 text-center text-sm text-slate-500">
+                        Tidak ada data yang cocok.
+                      </div>
+                    )}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
                       <div className="min-w-[1020px]">
                       <div className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr_0.65fr] gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                         <span>Nama</span>
@@ -1066,6 +1232,8 @@ export default function AdminDashboardClient({
                 </div>
               )}
 
+              {section === "cek-data" && <CekDataClient mothers={motherData} />}
+
               {section === "peta" && (
                 <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1114,7 +1282,7 @@ export default function AdminDashboardClient({
                 <div className="grid gap-4 xl:grid-cols-[1.45fr_0.8fr]">
                   <form
                     onSubmit={handleSubmit}
-                    className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]"
+                    className="rounded-[1.35rem] border border-slate-200/70 bg-white p-4 shadow-[0_14px_34px_rgba(15,23,42,0.05)] sm:p-5"
                   >
                     <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -1178,7 +1346,7 @@ export default function AdminDashboardClient({
                           placeholder="Kelurahan Sukamaju"
                         />
                       </Field>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="RT">
                           <input
                             value={form.rt}
@@ -1204,8 +1372,18 @@ export default function AdminDashboardClient({
                           placeholder="Jl. Melati No. 8"
                         />
                       </Field>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Latitude" helper="Contoh: -6.6716735">
+                      <div className="md:col-span-2">
+                        <Field label="Link Google Maps" helper="Opsional. Tempel link Google Maps untuk mengisi latitude dan longitude otomatis.">
+                          <input
+                            value={form.mapsLink}
+                            onChange={(event) => updateMapsLink(event.target.value)}
+                            className={inputClass}
+                            placeholder="https://www.google.com/maps/place/.../@-6.6209702,107.3368961,..."
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="Latitude" helper="Opsional. Bisa terisi dari link Maps.">
                           <input
                             value={form.latitude}
                             onChange={(event) => updateForm("latitude", event.target.value)}
@@ -1214,7 +1392,7 @@ export default function AdminDashboardClient({
                             placeholder="-6.6716735"
                           />
                         </Field>
-                        <Field label="Longitude" helper="Contoh: 107.3568055">
+                        <Field label="Longitude" helper="Opsional. Bisa terisi dari link Maps.">
                           <input
                             value={form.longitude}
                             onChange={(event) => updateForm("longitude", event.target.value)}
@@ -1269,20 +1447,20 @@ export default function AdminDashboardClient({
                           setForm(INITIAL_FORM);
                           setFormMessage("");
                         }}
-                        className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                        className="w-full rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 sm:w-auto"
                       >
                         Reset
                       </button>
                       <button
                         type="submit"
-                        className="rounded-2xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(245,158,11,0.22)] transition hover:bg-amber-600"
+                        className="w-full rounded-2xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(245,158,11,0.22)] transition hover:bg-amber-600 sm:w-auto"
                       >
                         Simpan data ibu
                       </button>
                     </div>
                   </form>
 
-                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
+                  <div className="rounded-[1.35rem] border border-slate-200/70 bg-white p-4 shadow-[0_14px_34px_rgba(15,23,42,0.05)] sm:p-5">
                     <p className="text-sm font-bold text-slate-950">Preview data</p>
                     <div className="mt-4 rounded-3xl bg-amber-50 p-4 text-sm text-slate-700">
                       <p className="font-heading text-xl font-bold text-slate-950">
@@ -1361,12 +1539,12 @@ export default function AdminDashboardClient({
         </div>
       </div>
       {selectedQrMother ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-[2rem] border border-white/80 bg-white p-6 text-center shadow-[0_28px_70px_rgba(15,23,42,0.25)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-4">
+          <div className="w-full max-w-sm rounded-[2rem] border border-white/80 bg-white p-4 text-center shadow-[0_28px_70px_rgba(15,23,42,0.25)] sm:p-6">
             <div className="flex items-start justify-between gap-4 text-left">
               <div>
                 <p className="section-kicker">QR ibu</p>
-                <h2 className="mt-2 font-heading text-2xl font-bold text-slate-950">
+                <h2 className="mt-2 font-heading text-xl font-bold text-slate-950 sm:text-2xl">
                   {selectedQrMother.fullName}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -1386,7 +1564,7 @@ export default function AdminDashboardClient({
             <div className="mt-6 flex justify-center">
               <QrBadge
                 value={selectedQrMother.qrCode}
-                size={220}
+                size={200}
                 showDownload
                 downloadName={`qr-ibu-${selectedQrMother.fullName.toLowerCase().replace(/\s+/g, "-")}.png`}
               />
