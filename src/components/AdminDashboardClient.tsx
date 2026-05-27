@@ -459,6 +459,7 @@ export default function AdminDashboardClient({
   const [formMessage, setFormMessage] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedQrMother, setSelectedQrMother] = useState<MotherProfile | null>(null);
   const deferredQuery = useDeferredValue(query);
   
   const profileButtonRef = useRef<HTMLButtonElement>(null);
@@ -627,7 +628,8 @@ export default function AdminDashboardClient({
   const activeTitle = NAV.find((item) => item.id === section)?.label ?? "Ringkasan";
   const recent = motherData.slice(0, 5);
 
-  return (
+    return (
+      <>
       <div className="mx-auto flex h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)]">
         <aside className="hidden w-[292px] shrink-0 border-r border-slate-200/70 bg-[#fffdf8] lg:flex lg:flex-col">
           <div className="border-b border-slate-100 p-4">
@@ -1007,20 +1009,21 @@ export default function AdminDashboardClient({
                     </span>
                   </div>
                   <div className="overflow-x-auto">
-                    <div className="min-w-[900px]">
-                      <div className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr] gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                      <div className="min-w-[1020px]">
+                      <div className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr_0.65fr] gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                         <span>Nama</span>
                         <span>Umur</span>
                         <span>Kategori</span>
                         <span>Riwayat bayi</span>
                         <span>Kunjungan</span>
                         <span>Risiko</span>
+                        <span>QR</span>
                       </div>
                       <div className="divide-y divide-slate-50">
                         {filtered.map((mother) => (
                           <div
                             key={mother.id}
-                            className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr] items-center gap-4 px-5 py-4 text-sm transition hover:bg-slate-50"
+                            className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr_0.65fr] items-center gap-4 px-5 py-4 text-sm transition hover:bg-slate-50"
                           >
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-slate-950">
@@ -1043,6 +1046,13 @@ export default function AdminDashboardClient({
                             >
                               {formatRiskLabel(mother.riskLevel)}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedQrMother(mother)}
+                              className="w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 transition hover:bg-amber-100"
+                            >
+                              Lihat QR
+                            </button>
                           </div>
                         ))}
                         {!filtered.length && (
@@ -1350,6 +1360,54 @@ export default function AdminDashboardClient({
           </main>
         </div>
       </div>
-  
+      {selectedQrMother ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[2rem] border border-white/80 bg-white p-6 text-center shadow-[0_28px_70px_rgba(15,23,42,0.25)]">
+            <div className="flex items-start justify-between gap-4 text-left">
+              <div>
+                <p className="section-kicker">QR ibu</p>
+                <h2 className="mt-2 font-heading text-2xl font-bold text-slate-950">
+                  {selectedQrMother.fullName}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {formatCategoryLabel(selectedQrMother.category)} - {selectedQrMother.village}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedQrMother(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-xl leading-none text-slate-500 transition hover:bg-slate-50"
+                aria-label="Tutup QR ibu"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 flex justify-center">
+              <QrBadge
+                value={selectedQrMother.qrCode}
+                size={220}
+                showDownload
+                downloadName={`qr-ibu-${selectedQrMother.fullName.toLowerCase().replace(/\s+/g, "-")}.png`}
+              />
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                Kode unik
+              </p>
+              <p className="mt-1 break-all font-mono text-sm font-bold text-slate-800">
+                {selectedQrMother.qrCode}
+              </p>
+            </div>
+
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              QR ini bisa discan di halaman Cek Data untuk menampilkan data ibu.
+            </p>
+          </div>
+        </div>
+      ) : null}
+      </>
+   
   );
 }

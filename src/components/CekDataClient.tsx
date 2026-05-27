@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import jsQR from "jsqr";
 import QrBadge from "@/components/QrBadge";
 import type { MotherProfile } from "@/lib/types";
 import {
@@ -14,6 +15,18 @@ type CekDataClientProps = {
 };
 
 type ScanStep = "idle" | "scanning" | "found" | "not_found";
+
+type BarcodeDetectorConstructor = new (options: {
+  formats: string[];
+}) => {
+  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
+};
+
+declare global {
+  interface Window {
+    BarcodeDetector?: BarcodeDetectorConstructor;
+  }
+}
 
 const RISK_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   tinggi: {
@@ -38,7 +51,15 @@ const CATEGORY_COLORS: Record<string, { badge: string }> = {
   menyusui: { badge: "bg-teal-100 text-teal-700" },
 };
 
-function ScannerFrame({ scanning }: { scanning: boolean }) {
+function ScannerFrame({
+  scanning,
+  videoRef,
+  canvasRef,
+}: {
+  scanning: boolean;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+}) {
   return (
     <div className="relative mx-auto h-64 w-64 sm:h-72 sm:w-72">
       {/* Corner marks */}
@@ -56,8 +77,18 @@ function ScannerFrame({ scanning }: { scanning: boolean }) {
         />
       ))}
 
-      {/* Camera placeholder */}
-      <div className="absolute inset-4 overflow-hidden rounded-xl bg-slate-900/5 backdrop-blur-sm">
+        {/* Camera preview */}
+        <div className="absolute inset-4 overflow-hidden rounded-xl bg-slate-900/5 backdrop-blur-sm">
+          <video
+            ref={videoRef}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity ${
+              scanning ? "opacity-100" : "opacity-0"
+            }`}
+            muted
+            playsInline
+          />
+          <canvas ref={canvasRef} className="hidden" />
+
         {/* Grid overlay */}
         <div
           className="absolute inset-0 opacity-10"
@@ -246,16 +277,127 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
   const [inputMode, setInputMode] = useState<"scan" | "manual">("scan");
   const [error, setError] = useState("");
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanFrameRef = useRef<number | null>(null);
 
   // Pick random QR codes for demo quick-select
   const demoMothers = mothers.slice(0, 3);
 
   function resetState() {
+    stopScanner();
     setStep("idle");
     setFound(null);
     setError("");
     setManualCode("");
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+  }
+
+  function findByQrCode(qrCode: string) {
+    const code = qrCode.trim().toUpperCase();
+    return mothers.find((m) => m.qrCode.toUpperCase() === code);
+  }
+
+  function finishScan(qrCode: string) {
+    const code = qrCode.trim();
+    const result = findByQrCode(code);
+
+    stopScanner();
+
+    if (result) {
+      setFound(result);
+      setStep("found");
+      setError("");
+    } else {
+      setFound(null);
+      setStep("not_found");
+      setError(`Kode "${code}" tidak ditemukan. Periksa kembali kartu QR Anda.`);
+    }
+  }
+
+  function stopScanner() {
+    if (scanFrameRef.current) {
+      cancelAnimationFrame(scanFrameRef.current);
+      scanFrameRef.current = null;
+    }
+
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+
+  async function startScanner() {
+    setStep("scanning");
+    setError("");
+    setFound(null);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStep("idle");
+      setError("Kamera tidak tersedia di browser ini. Gunakan input kode manual.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      const video = videoRef.current;
+
+      if (!video) {
+        stream.getTracks().forEach((track) => track.stop());
+        setStep("idle");
+        return;
+      }
+
+      streamRef.current = stream;
+      video.srcObject = stream;
+      await video.play();
+
+      const detector = window.BarcodeDetector
+        ? new window.BarcodeDetector({ formats: ["qr_code"] })
+        : null;
+
+      const scan = async () => {
+        if (!videoRef.current || !streamRef.current) return;
+
+        try {
+          let qrCode = "";
+
+          if (detector) {
+            const codes = await detector.detect(videoRef.current);
+            qrCode = codes[0]?.rawValue.trim() ?? "";
+          } else {
+            const canvas = canvasRef.current;
+            const context = canvas?.getContext("2d", { willReadFrequently: true });
+
+            if (canvas && context && videoRef.current.readyState >= 2) {
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+              const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+              qrCode = jsQR(imageData.data, imageData.width, imageData.height)?.data.trim() ?? "";
+            }
+          }
+
+          if (qrCode) {
+            finishScan(qrCode);
+            return;
+          }
+        } catch {
+          setError("QR belum terbaca. Pastikan kode jelas dan dekat kamera.");
+        }
+
+        scanFrameRef.current = requestAnimationFrame(scan);
+      };
+
+      scanFrameRef.current = requestAnimationFrame(scan);
+    } catch {
+      stopScanner();
+      setStep("idle");
+      setError("Izin kamera ditolak atau kamera tidak dapat dibuka. Gunakan input kode manual.");
+    }
   }
 
   function simulateScan(qrCode?: string) {
@@ -265,7 +407,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
 
     scanTimerRef.current = setTimeout(() => {
       const code = qrCode ?? demoMothers[Math.floor(Math.random() * demoMothers.length)]?.qrCode ?? "";
-      const result = mothers.find((m) => m.qrCode === code);
+      const result = findByQrCode(code);
       if (result) {
         setFound(result);
         setStep("found");
@@ -281,7 +423,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
       setError("Masukkan kode QR terlebih dahulu.");
       return;
     }
-    const result = mothers.find((m) => m.qrCode === code);
+    const result = findByQrCode(code);
     if (result) {
       setFound(result);
       setStep("found");
@@ -295,6 +437,7 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
   useEffect(() => {
     return () => {
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+      stopScanner();
     };
   }, []);
 
@@ -357,12 +500,12 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
               {/* Scan mode */}
               {inputMode === "scan" && (
                 <div className="flex flex-col items-center gap-6">
-                  <ScannerFrame scanning={step === "scanning"} />
+                  <ScannerFrame scanning={step === "scanning"} videoRef={videoRef} canvasRef={canvasRef} />
 
                   {step === "idle" && (
                     <button
                       id="btn-scan"
-                      onClick={() => simulateScan()}
+                      onClick={startScanner}
                       className="w-full rounded-2xl bg-amber-500 py-3.5 text-sm font-bold text-white transition hover:bg-amber-600 active:scale-[0.98]"
                     >
                       Mulai Scan
@@ -375,6 +518,11 @@ export default function CekDataClient({ mothers }: CekDataClientProps) {
                     >
                       Batalkan
                     </button>
+                  )}
+                  {error && inputMode === "scan" && (
+                    <p className="w-full rounded-xl bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-600">
+                      {error}
+                    </p>
                   )}
                   {(step === "found" || step === "not_found") && (
                     <button
