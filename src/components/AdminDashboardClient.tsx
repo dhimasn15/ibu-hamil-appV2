@@ -480,7 +480,9 @@ export default function AdminDashboardClient({
   const [formMessage, setFormMessage] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [selectedQrMother, setSelectedQrMother] = useState<MotherProfile | null>(null);
+  const [selectedDetailMother, setSelectedDetailMother] = useState<MotherProfile | null>(null);
   const deferredQuery = useDeferredValue(query);
   
   const profileButtonRef = useRef<HTMLButtonElement>(null);
@@ -687,6 +689,11 @@ export default function AdminDashboardClient({
   const activeTitle = NAV.find((item) => item.id === section)?.label ?? "Ringkasan";
   const recent = motherData.slice(0, 5);
 
+  function selectSection(nextSection: Section) {
+    setSection(nextSection);
+    setMobileNavOpen(false);
+  }
+
     return (
       <>
       <div className="mx-auto flex min-h-screen w-full max-w-[1800px] overflow-hidden rounded-none border border-white/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)] lg:h-screen">
@@ -715,7 +722,7 @@ export default function AdminDashboardClient({
             {NAV.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setSection(item.id)}
+                onClick={() => selectSection(item.id)}
                 className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
                   section === item.id
                     ? "bg-amber-500 text-white shadow-[0_10px_22px_rgba(245,158,11,0.2)]"
@@ -842,20 +849,46 @@ export default function AdminDashboardClient({
                 </div>
               </div>
 
-              <div className="mt-5 flex gap-2 overflow-x-auto rounded-2xl bg-slate-50 p-1 sm:mt-6">
-                {NAV.map((item) => (
+              <div className="mt-5 rounded-2xl bg-slate-50 p-1 sm:mt-6">
+                <div className="flex items-center justify-between gap-3 sm:hidden">
                   <button
-                    key={item.id}
-                    onClick={() => setSection(item.id)}
-                    className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                      section === item.id
-                        ? "bg-white text-slate-950 shadow-sm"
-                        : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
-                    }`}
+                    type="button"
+                    onClick={() => setMobileNavOpen((open) => !open)}
+                    className="flex flex-1 items-center justify-between rounded-xl bg-white px-4 py-3 text-left text-sm font-bold text-slate-950 shadow-sm"
+                    aria-expanded={mobileNavOpen}
+                    aria-controls="admin-mobile-nav"
                   >
-                    {item.label}
+                    <span>{activeTitle}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                      <span className="sr-only">Buka menu dashboard</span>
+                      <span className="flex flex-col gap-1">
+                        <span className="h-0.5 w-4 rounded-full bg-current" />
+                        <span className="h-0.5 w-4 rounded-full bg-current" />
+                        <span className="h-0.5 w-4 rounded-full bg-current" />
+                      </span>
+                    </span>
                   </button>
-                ))}
+                </div>
+
+                <div
+                  id="admin-mobile-nav"
+                  className={`${mobileNavOpen ? "grid" : "hidden"} mt-2 gap-1 sm:flex sm:mt-0 sm:gap-2 sm:overflow-x-auto`}
+                >
+                  {NAV.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => selectSection(item.id)}
+                      className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition sm:shrink-0 ${
+                        section === item.id
+                          ? "bg-white text-slate-950 shadow-sm"
+                          : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
+                      }`}
+                    >
+                      <Icon name={item.icon} />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
 
@@ -1122,60 +1155,8 @@ export default function AdminDashboardClient({
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-3 p-3 md:hidden">
-                    {filtered.map((mother) => (
-                      <div
-                        key={mother.id}
-                        className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-bold text-slate-950">{mother.fullName}</p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {mother.village}, RT {mother.rt}/RW {mother.rw}
-                            </p>
-                          </div>
-                          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${RISK_STYLE[mother.riskLevel].pill}`}>
-                            {formatRiskLabel(mother.riskLevel)}
-                          </span>
-                        </div>
-
-                        <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                          <div className="rounded-xl bg-slate-50 px-3 py-2">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Umur</p>
-                            <p className="mt-1 font-semibold text-slate-700">{mother.age} tahun</p>
-                          </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-2">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Kategori</p>
-                            <p className="mt-1 font-semibold text-slate-700">{formatCategoryLabel(mother.category)}</p>
-                          </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-2">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Riwayat</p>
-                            <p className="mt-1 font-semibold text-slate-700">{formatBabyHistoryLabel(mother.babyLossHistory)}</p>
-                          </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-2">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Kunjungan</p>
-                            <p className="mt-1 font-semibold text-slate-700">{mother.lastVisit}</p>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setSelectedQrMother(mother)}
-                          className="mt-4 w-full rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100"
-                        >
-                          Lihat QR Ibu
-                        </button>
-                      </div>
-                    ))}
-                    {!filtered.length && (
-                      <div className="rounded-2xl border border-slate-100 bg-white px-5 py-10 text-center text-sm text-slate-500">
-                        Tidak ada data yang cocok.
-                      </div>
-                    )}
-                  </div>
-                  <div className="hidden overflow-x-auto md:block">
-                      <div className="min-w-[1020px]">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[760px] md:min-w-[1020px]">
                       <div className="grid grid-cols-[1.5fr_0.5fr_0.85fr_1.1fr_1fr_0.8fr_0.65fr] gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                         <span>Nama</span>
                         <span>Umur</span>
@@ -1183,7 +1164,7 @@ export default function AdminDashboardClient({
                         <span>Riwayat bayi</span>
                         <span>Kunjungan</span>
                         <span>Risiko</span>
-                        <span>QR</span>
+                        <span>Aksi</span>
                       </div>
                       <div className="divide-y divide-slate-50">
                         {filtered.map((mother) => (
@@ -1214,10 +1195,10 @@ export default function AdminDashboardClient({
                             </span>
                             <button
                               type="button"
-                              onClick={() => setSelectedQrMother(mother)}
+                              onClick={() => setSelectedDetailMother(mother)}
                               className="w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 transition hover:bg-amber-100"
                             >
-                              Lihat QR
+                              Detail
                             </button>
                           </div>
                         ))}
@@ -1538,6 +1519,88 @@ export default function AdminDashboardClient({
           </main>
         </div>
       </div>
+      {selectedDetailMother ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-4">
+          <div className="w-full max-w-3xl rounded-[2rem] border border-white/80 bg-white p-4 shadow-[0_28px_70px_rgba(15,23,42,0.25)] sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="section-kicker">Detail data ibu</p>
+                <h2 className="mt-2 font-heading text-xl font-bold text-slate-950 sm:text-2xl">
+                  {selectedDetailMother.fullName}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedDetailMother.village}, RT {selectedDetailMother.rt}/RW {selectedDetailMother.rw}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDetailMother(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-xl leading-none text-slate-500 transition hover:bg-slate-50"
+                aria-label="Tutup detail ibu"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Umur</p>
+                <p className="mt-1 font-semibold text-slate-800">{selectedDetailMother.age} tahun</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Kategori</p>
+                <p className="mt-1 font-semibold text-slate-800">{formatCategoryLabel(selectedDetailMother.category)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Risiko</p>
+                <span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${RISK_STYLE[selectedDetailMother.riskLevel].pill}`}>
+                  {formatRiskLabel(selectedDetailMother.riskLevel)}
+                </span>
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Riwayat bayi</p>
+                <p className="mt-1 font-semibold text-slate-800">{formatBabyHistoryLabel(selectedDetailMother.babyLossHistory)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Kunjungan terakhir</p>
+                <p className="mt-1 font-semibold text-slate-800">{selectedDetailMother.lastVisit}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Koordinat</p>
+                <p className="mt-1 font-semibold text-slate-800">{selectedDetailMother.latitude}, {selectedDetailMother.longitude}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_0.8fr]">
+              <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Alamat</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{selectedDetailMother.address}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Catatan</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{selectedDetailMother.notes}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedDetailMother(null)}
+                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedQrMother(selectedDetailMother)}
+                className="rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
+              >
+                Lihat QR Ibu
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {selectedQrMother ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-4">
           <div className="w-full max-w-sm rounded-[2rem] border border-white/80 bg-white p-4 text-center shadow-[0_28px_70px_rgba(15,23,42,0.25)] sm:p-6">
